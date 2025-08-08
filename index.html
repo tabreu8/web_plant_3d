@@ -416,9 +416,6 @@
         <header>
             <h1>3D Industrial Plant Simulator</h1>
             <div class="conn">
-                <span id="connState" class="pill bad">Disconnected</span>
-                <span id="dataState" class="pill bad">No data</span>
-                <button id="btnConnect" class="inline">Connect</button>
                 <button id="btnRun" class="inline primary">Start</button>
                 <button id="btnPause" class="inline">Pause</button>
                 <button id="btnEStop" class="inline"
@@ -465,6 +462,9 @@
                             <input id="pubInterval" type="number" value="1000" />
                         </div>
                         <div></div>
+                    </div>
+                    <div class="row" style="margin-top:8px">
+                        <button id="btnConnect" class="inline">Connect</button>
                     </div>
                 </div>
             </div>
@@ -606,7 +606,7 @@
             emergency: false,
             // equipment states
             conveyor01: { speedSet: 0, speedActual: 0, enabled: false },
-            qc01: { passRate: 0.9, last: null },
+            qc01: { passRate: 0.9, last: null, lastId: null },
             // production order (affects spawn only)
             production: { orderId: 'PO-001', filters: { box: true, cylinder: true }, largeOnly: false },
             // discrete-event line state (belts and items)
@@ -663,9 +663,11 @@
             }
 
             const conn = $('#connState');
-            conn.textContent = state.connected ? 'Connected' : 'Disconnected';
-            conn.classList.toggle('ok', state.connected);
-            conn.classList.toggle('bad', !state.connected);
+            if (conn) {
+                conn.textContent = state.connected ? 'Connected' : 'Disconnected';
+                conn.classList.toggle('ok', state.connected);
+                conn.classList.toggle('bad', !state.connected);
+            }
             // status bar dot
             const sbConn = document.getElementById('sbConn');
             if (sbConn) {
@@ -674,16 +676,21 @@
             }
 
             const dataPill = $('#dataState');
-            if (state.dataCount > 0) {
-                const age = Math.max(0, Math.floor((Date.now() - state.lastDataTs) / 1000));
-                dataPill.textContent = `Data ${state.dataCount} (last ${age}s)`;
-                dataPill.classList.add('ok');
-                dataPill.classList.remove('bad');
-            } else {
-                dataPill.textContent = 'No data';
-                dataPill.classList.remove('ok');
-                dataPill.classList.add('bad');
+            if (dataPill) {
+                if (state.dataCount > 0) {
+                    const age = Math.max(0, Math.floor((Date.now() - state.lastDataTs) / 1000));
+                    dataPill.textContent = `Data ${state.dataCount} (last ${age}s)`;
+                    dataPill.classList.add('ok');
+                    dataPill.classList.remove('bad');
+                } else {
+                    dataPill.textContent = 'No data';
+                    dataPill.classList.remove('ok');
+                    dataPill.classList.add('bad');
+                }
             }
+
+            const btnConn = document.getElementById('btnConnect');
+            if (btnConn) btnConn.textContent = state.connected ? 'Disconnect' : 'Connect';
 
             // Beacon
             // beacon removed
@@ -1094,23 +1101,80 @@
 
             // removed tank/pump visuals
 
-            // QC station over main belt (inspection gantry)
-            const qc = new THREE.Mesh(
-                new THREE.BoxGeometry(0.8, 1.2, 1.2),
-                new THREE.MeshStandardMaterial({ color: 0x6a7fa8 })
-            );
-            // position near 65% along beltA
-            qc.position.set(1.8, 1.0, 0);
-            scene.add(qc);
-
-            // Simple nozzle over belt (decorative only for now)
-            const nozzle = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.06, 0.06, 0.5, 12),
-                new THREE.MeshStandardMaterial({ color: 0xb8d0ff })
-            );
-            nozzle.position.set(1.2, 1.2, 0);
-            scene.add(nozzle);
-            objs.nozzle = nozzle;
+            // QC station at conveyor intersection with strip curtains
+            function makeCurtainTexture() {
+                const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+                const ctx = c.getContext('2d');
+                // opaque rubber-like look: dark base with lighter strip highlights
+                ctx.fillStyle = '#202a3f';
+                ctx.fillRect(0, 0, c.width, c.height);
+                for (let x = 0; x < c.width; x += 16) {
+                    ctx.fillStyle = '#2b3856';
+                    ctx.fillRect(x, 0, 10, c.height);
+                    ctx.fillStyle = '#394867';
+                    ctx.fillRect(x, 0, 2, c.height);
+                    ctx.fillRect(x + 8, 0, 2, c.height);
+                }
+                const tex = new THREE.CanvasTexture(c);
+                tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 4;
+                return tex;
+            }
+            function makeCurtain(width, height, orientation) {
+                const geo = new THREE.PlaneGeometry(width, height);
+                const mat = new THREE.MeshStandardMaterial({ map: makeCurtainTexture(), metalness: 0.0, roughness: 1.0, side: THREE.DoubleSide });
+                const m = new THREE.Mesh(geo, mat);
+                if (orientation === 'acrossA') m.rotation.y = Math.PI / 2; // face +X/-X
+                return m;
+            }
+            function makeQCStationIntersection() {
+                const center = new THREE.Vector3(5, 0, 0); // belts meet
+                const group = new THREE.Group();
+                // Canopy
+                const canopySizeX = 1.6, canopySizeZ = 2.2, canopyH = 1.6;
+                const canopy = new THREE.Mesh(
+                    new THREE.BoxGeometry(canopySizeX, 0.08, canopySizeZ),
+                    new THREE.MeshStandardMaterial({ color: 0x3b4b6f, metalness: 0.4, roughness: 0.5 })
+                );
+                canopy.position.set(0, canopyH, 0);
+                group.add(canopy);
+                // (Top info panel removed — stack light only)
+                // Stack light on top
+                const slBase = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.12, 16), new THREE.MeshStandardMaterial({ color: 0x5c6a82, metalness: 0.4, roughness: 0.5 }));
+                slBase.position.set(canopySizeX / 2 - 0.18, canopyH + 0.1, canopySizeZ / 2 - 0.18);
+                const segGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.09, 20);
+                const segR = new THREE.Mesh(segGeo, new THREE.MeshBasicMaterial({ color: 0xff4d4f }));
+                const segY = new THREE.Mesh(segGeo, new THREE.MeshBasicMaterial({ color: 0xf5d76e }));
+                const segG = new THREE.Mesh(segGeo, new THREE.MeshBasicMaterial({ color: 0x57d38c }));
+                segR.position.set(slBase.position.x, slBase.position.y + 0.11, slBase.position.z);
+                segY.position.set(slBase.position.x, slBase.position.y + 0.22, slBase.position.z);
+                segG.position.set(slBase.position.x, slBase.position.y + 0.33, slBase.position.z);
+                group.add(slBase, segR, segY, segG);
+                // Posts
+                const postMat = new THREE.MeshStandardMaterial({ color: 0x6b7a95, metalness: 0.2, roughness: 0.8 });
+                const post = new THREE.CylinderGeometry(0.05, 0.05, canopyH, 12);
+                const px = canopySizeX / 2 - 0.08, pz = canopySizeZ / 2 - 0.08;
+                const p1 = new THREE.Mesh(post, postMat); p1.position.set(-px, canopyH / 2, -pz);
+                const p2 = new THREE.Mesh(post, postMat); p2.position.set(px, canopyH / 2, -pz);
+                const p3 = new THREE.Mesh(post, postMat); p3.position.set(-px, canopyH / 2, pz);
+                const p4 = new THREE.Mesh(post, postMat); p4.position.set(px, canopyH / 2, pz);
+                group.add(p1, p2, p3, p4);
+                // Curtains
+                const curtainH = 0.72; // from ~0.78 to ~1.5
+                const baseY = 1.46; // top of curtain
+                const front = makeCurtain(1.2, curtainH, 'acrossA');
+                front.position.set(-0.36, baseY - curtainH / 2, 0); // slightly before center on A
+                const rear = makeCurtain(1.2, curtainH, 'acrossA');
+                rear.position.set(0.36, baseY - curtainH / 2, 0); // opposite side on A
+                const sideB = makeCurtain(1.2, curtainH, 'front');
+                sideB.position.set(0, baseY - curtainH / 2, 0.62); // towards +Z
+                const sideC = makeCurtain(1.2, curtainH, 'front');
+                sideC.position.set(0, baseY - curtainH / 2, -0.62); // towards -Z
+                group.add(front, rear, sideB, sideC);
+                group.position.copy(center);
+                scene.add(group);
+                objs.qcStation = { group, segR, segY, segG };
+            }
+            makeQCStationIntersection();
 
             // Diverter gate at split (routes pass/right to green or fail/left to red)
             const gatePivot = new THREE.Group();
@@ -1229,8 +1293,8 @@
                 return objs[id];
             }
             makeHMIScreen('hmiB', 'beltB');
-            // Rotate HMI on C by 90 degrees clockwise
-            makeHMIScreen('hmiC', 'beltC', -Math.PI / 2);
+            // Rotate HMI on C by 180 degrees
+            makeHMIScreen('hmiC', 'beltC', Math.PI);
 
             // Raycaster for picking
             raycaster = new THREE.Raycaster();
@@ -1402,6 +1466,22 @@
             updateHMIScreen('hmiB', 'vgB_');
             updateHMIScreen('hmiC', 'vgC_');
 
+            // (Top panel removed)
+
+            // Drive stack light: red=FAIL, green=PASS, yellow=waiting
+            if (objs.qcStation && objs.qcStation.segR) {
+                const pass = state.qc01.last;
+                const r = objs.qcStation.segR.material; const y = objs.qcStation.segY.material; const g = objs.qcStation.segG.material;
+                const off = 0.2;
+                r.color.set(pass === false ? 0xff4d4f : (off * 0x010101));
+                y.color.set(pass === null ? 0xf5d76e : (off * 0x010101));
+                g.color.set(pass === true ? 0x57d38c : (off * 0x010101));
+                r.opacity = (pass === false) ? 1.0 : 0.3;
+                y.opacity = (pass === null) ? 1.0 : 0.3;
+                g.opacity = (pass === true) ? 1.0 : 0.3;
+                r.transparent = y.transparent = g.transparent = true;
+            }
+
             controls.update();
             renderer.render(scene, camera);
         }
@@ -1554,9 +1634,10 @@
                 const v = b.speed;
                 it.s += (v * dt) / Math.max(0.1, b.length);
                 // Evaluate quality earlier under QC gantry, but do not move diverter yet
-                if (it.s >= 0.66 && it.beltId === 'beltA' && !it.evaluated) {
+                // Evaluate quality near the intersection (end of beltA)
+                if (it.s >= 0.90 && it.beltId === 'beltA' && !it.evaluated) {
                     const pass = Math.random() < state.qc01.passRate;
-                    it.good = pass; it.evaluated = true; state.qc01.last = pass; syncUI();
+                    it.good = pass; it.evaluated = true; state.qc01.last = pass; state.qc01.lastId = it.id; syncUI();
                 }
                 // Arm diverter only when the evaluated item is about to touch it
                 if (it.beltId === 'beltA' && it.evaluated && !it.gateSet && it.s >= 0.92) {
@@ -1628,7 +1709,15 @@
             cfg.baseTopic = $('#baseTopic').value || 'plant';
             cfg.qos = Number($('#qos').value) || 1;
             cfg.pubMs = clamp(Number($('#pubInterval').value) || 1000, 200, 10000);
-            connectMQTT();
+            if (state.connected && state.client) {
+                try { state.client.end(true); } catch (e) { }
+                state.client = null;
+                state.connected = false;
+                syncUI();
+                log('MQTT disconnected by user');
+            } else {
+                connectMQTT();
+            }
         });
 
         $('#btnRun').addEventListener('click', () => { state.running = true; log('Simulation started'); });
