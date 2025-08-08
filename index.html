@@ -72,6 +72,15 @@
             font-size: 14px;
         }
 
+        #mobileControls .row {
+            margin-bottom: 8px;
+        }
+
+        #mobileControls button {
+            margin: 0;
+            min-height: 36px;
+        }
+
         .pill {
             padding: 4px 8px;
             border-radius: 999px;
@@ -407,44 +416,68 @@
         @media (max-width: 900px) {
             #app {
                 grid-template-columns: 1fr;
-                grid-template-rows: 52px auto 1fr;
-                grid-template-areas: 'top' 'left' 'main';
+                grid-template-rows: 52px 1fr;
+                grid-template-areas: 'top' 'main';
             }
 
             .splitter {
                 display: none;
             }
 
-            .conn {
-                flex-wrap: nowrap;
-                gap: 6px;
+            header h1 {
+                font-size: 14px;
+                flex: 1;
+                min-width: 0;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
 
-            .conn button {
-                padding: 6px 10px;
-                font-size: 13px;
-                white-space: nowrap;
+            .conn {
+                flex-wrap: nowrap;
+                gap: 4px;
+            }
+
+            /* Hide control buttons on mobile to save space */
+            .conn button:not(.sidebar-toggle) {
+                display: none;
             }
 
             .sidebar-toggle {
                 display: block;
-                margin-right: 8px;
+                padding: 6px 10px;
+                font-size: 12px;
+                white-space: nowrap;
             }
 
             aside {
-                max-height: 45vh;
-                transition: transform 0.3s ease, opacity 0.3s ease;
-                position: relative;
-                z-index: 10;
+                position: fixed;
+                top: 52px;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 1000;
+                background: var(--panel);
+                border: none;
+                max-height: none;
+                height: auto;
+                overflow-y: auto;
+                transition: transform 0.3s ease;
+                transform: translateX(0);
+                padding: 12px;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             aside.collapsed {
-                transform: translateY(-100%);
-                opacity: 0;
+                transform: translateX(-100%);
+                opacity: 1;
                 pointer-events: none;
-                max-height: 0;
-                padding: 0 12px;
-                overflow: hidden;
+            }
+
+            #scene {
+                grid-area: main;
+                position: relative;
             }
         }
     </style>
@@ -466,6 +499,18 @@
             <div class="row no-flex" style="justify-content: space-between; margin: 2px 2px 8px 2px;">
                 <button id="btnExpandAll" class="inline" style="padding:4px 8px">Expand All</button>
                 <button id="btnCollapseAll" class="inline" style="padding:4px 8px">Collapse All</button>
+            </div>
+            <!-- Mobile control buttons -->
+            <div id="mobileControls" class="section" style="display: none;">
+                <h3>Plant Controls</h3>
+                <div class="section-body">
+                    <div class="row no-flex" style="gap: 8px;">
+                        <button id="btnRunMobile" class="inline primary" style="flex: 1;">Start</button>
+                        <button id="btnPauseMobile" class="inline" style="flex: 1;">Pause</button>
+                        <button id="btnEStopMobile" class="inline"
+                            style="flex: 1; border-color:#5a2a2b;background:#2a1314;color:#ffb3b3">E-STOP</button>
+                    </div>
+                </div>
             </div>
             <div class="section">
                 <h3>MQTT</h3>
@@ -1548,28 +1593,55 @@
         function setupSidebarToggle() {
             const toggleBtn = document.getElementById('btnSidebarToggle');
             const sidebar = document.querySelector('aside');
+            const mobileControls = document.getElementById('mobileControls');
 
             if (!toggleBtn || !sidebar) return;
 
-            // Start with sidebar collapsed on mobile
-            if (window.innerWidth <= 900) {
-                sidebar.classList.add('collapsed');
-                toggleBtn.textContent = '☰ Show Controls';
+            // Setup mobile control visibility and button wiring
+            function updateMobileView() {
+                const isMobile = window.innerWidth <= 900;
+                if (mobileControls) {
+                    mobileControls.style.display = isMobile ? 'block' : 'none';
+                }
+
+                if (isMobile) {
+                    sidebar.classList.add('collapsed');
+                    toggleBtn.textContent = '☰ Controls';
+
+                    // Wire up mobile control buttons to main buttons
+                    const btnRun = document.getElementById('btnRun');
+                    const btnPause = document.getElementById('btnPause');
+                    const btnEStop = document.getElementById('btnEStop');
+                    const btnRunMobile = document.getElementById('btnRunMobile');
+                    const btnPauseMobile = document.getElementById('btnPauseMobile');
+                    const btnEStopMobile = document.getElementById('btnEStopMobile');
+
+                    if (btnRunMobile && btnRun) {
+                        btnRunMobile.onclick = () => btnRun.click();
+                    }
+                    if (btnPauseMobile && btnPause) {
+                        btnPauseMobile.onclick = () => btnPause.click();
+                    }
+                    if (btnEStopMobile && btnEStop) {
+                        btnEStopMobile.onclick = () => btnEStop.click();
+                    }
+                } else {
+                    sidebar.classList.remove('collapsed');
+                    toggleBtn.textContent = '☰ Controls';
+                }
             }
+
+            // Initial setup
+            updateMobileView();
 
             toggleBtn.addEventListener('click', () => {
                 sidebar.classList.toggle('collapsed');
                 const isCollapsed = sidebar.classList.contains('collapsed');
-                toggleBtn.textContent = isCollapsed ? '☰ Show Controls' : '✕ Hide Controls';
+                toggleBtn.textContent = isCollapsed ? '☰ Controls' : '✕ Close';
             });
 
             // Handle window resize
-            window.addEventListener('resize', () => {
-                if (window.innerWidth > 900) {
-                    sidebar.classList.remove('collapsed');
-                    toggleBtn.textContent = '☰ Controls';
-                }
-            });
+            window.addEventListener('resize', updateMobileView);
         }
 
         function onResize() {
