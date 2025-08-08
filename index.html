@@ -42,8 +42,8 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 8px 12px;
-            background: #11152a;
+            padding: 10px 12px;
+            background: var(--panel);
             border-bottom: 1px solid #212649;
         }
 
@@ -83,19 +83,35 @@
             grid-area: left;
             background: var(--panel);
             border-right: 1px solid #212649;
-            overflow: auto;
             min-width: 240px;
+            padding: 12px;
+            overflow: auto;
         }
 
         .splitter {
             grid-area: split;
             cursor: col-resize;
             background: linear-gradient(to right, transparent 0, #1e2347 40%, #1e2347 60%, transparent 100%);
+            position: relative;
         }
+
+        .splitter::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at 50% 30%, #2b315c 2px, transparent 3px),
+                radial-gradient(circle at 50% 50%, #2b315c 2px, transparent 3px),
+                radial-gradient(circle at 50% 70%, #2b315c 2px, transparent 3px);
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+
 
         main {
             grid-area: main;
             position: relative;
+            overflow: hidden;
         }
 
         #scene {
@@ -104,22 +120,65 @@
         }
 
         .section {
-            padding: 12px;
-            border-bottom: 1px solid #212649;
+            margin: 10px 0 14px;
+            border: 1px solid #2b315c;
+            border-radius: 8px;
+            background: #0f1326;
+            overflow: hidden;
+            box-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
         }
 
-        h3 {
-            margin: 0 0 8px;
+        .section h3 {
+            margin: 0;
+            padding: 10px 12px;
             font-size: 13px;
-            letter-spacing: .2px;
+            font-weight: 700;
+            letter-spacing: .02em;
+            cursor: pointer;
+            user-select: none;
             color: #cfe2ff;
+            background: linear-gradient(180deg, #131a3a, #0f142f);
+            border-bottom: 1px solid #2b315c;
+            position: relative;
+        }
+
+        .section h3::before {
+            content: '\25BC';
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%) rotate(0deg);
+            font-size: 11px;
+            color: #9db6ff;
+            transition: transform .15s ease;
+        }
+
+        .section.collapsed h3::before {
+            transform: translateY(-50%) rotate(-90deg);
+        }
+
+        .section h3:hover {
+            background: #101736;
+        }
+
+        .section-body {
+            padding: 10px 12px;
+        }
+
+        .section.collapsed .section-body {
+            display: none;
+        }
+
+        /* Also support sections without explicit section-body wrapper */
+        .section.collapsed>*:not(h3) {
+            display: none;
         }
 
         label {
-            font-size: 12px;
-            color: var(--muted);
             display: block;
-            margin: 6px 0 3px;
+            color: var(--muted);
+            font-size: 12px;
+            margin: 6px 0 4px;
         }
 
         input,
@@ -133,6 +192,7 @@
             border-radius: 6px;
             padding: 8px;
             font-size: 13px;
+            transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
         }
 
         button {
@@ -144,6 +204,23 @@
         button.primary {
             background: #12324e;
             border-color: #1b6ea7;
+        }
+
+        button:hover {
+            filter: brightness(1.05);
+        }
+
+        button:active {
+            filter: brightness(0.98);
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus,
+        button:focus {
+            outline: none;
+            border-color: #2f66a7;
+            box-shadow: 0 0 0 2px rgba(53, 185, 255, 0.2);
         }
 
         button.inline {
@@ -161,15 +238,53 @@
             flex: 1;
         }
 
-        /* Do not stretch children on specific rows */
         .row.no-flex>* {
             flex: 0 0 auto;
         }
 
-        /* Keep checkboxes compact and not full width */
         input[type="checkbox"] {
             width: auto;
             height: auto;
+        }
+
+        /* Slider styling */
+        input[type="range"] {
+            appearance: none;
+            -webkit-appearance: none;
+            height: 28px;
+            background: transparent;
+        }
+
+        input[type="range"]::-webkit-slider-runnable-track {
+            height: 6px;
+            background: #1a2242;
+            border-radius: 999px;
+            border: 1px solid #2b315c;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #35b9ff;
+            margin-top: -5px;
+            box-shadow: 0 0 0 2px #0f1326;
+        }
+
+        input[type="range"]::-moz-range-track {
+            height: 6px;
+            background: #1a2242;
+            border-radius: 999px;
+            border: 1px solid #2b315c;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #35b9ff;
+            border: none;
         }
 
         .chk {
@@ -204,8 +319,6 @@
             color: var(--danger);
         }
 
-        /* alarms removed for now */
-
         .tooltip {
             position: absolute;
             pointer-events: none;
@@ -217,10 +330,67 @@
             color: #e8f1ff;
             transform: translate(-50%, -120%);
             display: none;
+            white-space: pre;
+            /* allow multi-line */
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+        }
+
+        .tooltip.show {
+            display: block;
         }
 
         canvas {
             display: block;
+        }
+
+        /* Status bar */
+        .statusbar {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(18, 22, 40, 0.9);
+            border-top: 1px solid #212649;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: #cfe2ff;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        .statusbar span+span {
+            position: relative;
+            padding-left: 10px;
+        }
+
+        .statusbar span+span::before {
+            content: '\2022';
+            position: absolute;
+            left: 0;
+            top: 0;
+            color: #3c4570;
+        }
+
+        .statusbar .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .statusbar .ok {
+            background: #57d38c;
+        }
+
+        .statusbar .bad {
+            background: #ff4d4f;
+        }
+
+        .statusbar .muted {
+            opacity: .7;
         }
 
         @media (max-width: 900px) {
@@ -256,95 +426,100 @@
             </div>
         </header>
         <aside>
+            <div class="row no-flex" style="justify-content: space-between; margin: 2px 2px 8px 2px;">
+                <button id="btnExpandAll" class="inline" style="padding:4px 8px">Expand all</button>
+                <button id="btnCollapseAll" class="inline" style="padding:4px 8px">Collapse all</button>
+            </div>
             <div class="section">
                 <h3>MQTT</h3>
-                <label>Broker URL (WS)</label>
-                <input id="mqttUrl" placeholder="ws://localhost:9001" />
-                <div class="row">
-                    <div>
-                        <label>User</label>
-                        <input id="mqttUser" placeholder="optional" />
+                <div class="section-body">
+                    <label>Broker URL (WS)</label>
+                    <input id="mqttUrl" placeholder="ws://localhost:9001" />
+                    <div class="row">
+                        <div>
+                            <label>User</label>
+                            <input id="mqttUser" placeholder="optional" />
+                        </div>
+                        <div>
+                            <label>Password</label>
+                            <input id="mqttPass" placeholder="optional" type="password" />
+                        </div>
                     </div>
-                    <div>
-                        <label>Password</label>
-                        <input id="mqttPass" placeholder="optional" type="password" />
+                    <div class="row">
+                        <div>
+                            <label>Base Topic</label>
+                            <input id="baseTopic" value="plant" />
+                        </div>
+                        <div>
+                            <label>QoS</label>
+                            <select id="qos">
+                                <option>0</option>
+                                <option selected>1</option>
+                                <option>2</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
-                <div class="row">
-                    <div>
-                        <label>Base Topic</label>
-                        <input id="baseTopic" value="plant" />
-                    </div>
-                    <div>
-                        <label>QoS</label>
-                        <select id="qos">
-                            <option>0</option>
-                            <option selected>1</option>
-                            <option>2</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="row">
-                    <div>
-                        <label>Publish Interval (ms)</label>
-                        <input id="pubInterval" type="number" value="1000" />
-                    </div>
-                    <div>
-                        <label>QoS</label>
-                        <select id="qos">
-                            <option>0</option>
-                            <option selected>1</option>
-                            <option>2</option>
-                        </select>
+                    <div class="row">
+                        <div>
+                            <label>Publish Interval (ms)</label>
+                            <input id="pubInterval" type="number" value="1000" />
+                        </div>
+                        <div></div>
                     </div>
                 </div>
             </div>
 
             <div class="section">
                 <h3>Conveyor</h3>
-                <div class="kv"><span>Speed (m/s)</span><strong id="convSpeedVal">0.00</strong></div>
-                <input id="convSpeed" type="range" min="0" max="2" step="0.01" value="0" />
-                <div class="row">
-                    <button id="convStart" class="inline">Start</button>
-                    <button id="convStop" class="inline">Stop</button>
+                <div class="section-body">
+                    <div class="kv"><span>Speed (m/s)</span><strong id="convSpeedVal">0.00</strong></div>
+                    <input id="convSpeed" type="range" min="0" max="2" step="0.01" value="0" />
+                    <div class="row">
+                        <button id="convStart" class="inline">Start</button>
+                        <button id="convStop" class="inline">Stop</button>
+                    </div>
                 </div>
             </div>
 
             <div class="section">
-                <h3>QC Station</h3>
-                <div class="kv"><span>Pass Rate Target</span><strong id="qcRateVal">0.90</strong></div>
-                <input id="qcRate" type="range" min="0" max="1" step="0.01" value="0.90" />
-                <div class="kv"><span>Last Result</span><strong id="qcLast">—</strong></div>
+                <h3>Quality Control Station</h3>
+                <div class="section-body">
+                    <div class="kv"><span>Pass Rate Target</span><strong id="qcRateVal">0.90</strong></div>
+                    <input id="qcRate" type="range" min="0" max="1" step="0.01" value="0.90" />
+                    <div class="kv"><span>Last Result</span><strong id="qcLast">—</strong></div>
+                </div>
             </div>
 
             <div class="section">
                 <h3>Production Order</h3>
-                <label>Order ID</label>
-                <input id="poId" placeholder="PO-001" />
-                <div class="row no-flex" style="margin-top:8px">
-                    <label class="chk"><input type="checkbox" id="poBox" checked /> <span>Box</span></label>
-                    <label class="chk"><input type="checkbox" id="poCyl" checked /> <span>Cylinder</span></label>
+                <div class="section-body">
+                    <label>Order ID</label>
+                    <input id="poId" placeholder="PO-001" />
+                    <div class="row no-flex" style="margin-top:8px">
+                        <label class="chk"><input type="checkbox" id="poBox" checked /> <span>Box</span></label>
+                        <label class="chk"><input type="checkbox" id="poCyl" checked /> <span>Cylinder</span></label>
+                    </div>
+                    <div class="row no-flex" style="margin-top:6px">
+                        <label class="chk"><input type="checkbox" id="poLarge" /> <span>Large only</span></label>
+                    </div>
+                    <div class="row" style="margin-top:8px">
+                        <button id="poSubmit" class="inline">Submit</button>
+                    </div>
                 </div>
-                <div class="row no-flex" style="margin-top:6px">
-                    <label class="chk"><input type="checkbox" id="poLarge" /> <span>Large only</span></label>
-                </div>
-                <div class="row" style="margin-top:8px">
-                    <button id="poSubmit" class="inline">Submit</button>
-                </div>
-            </div>
-
-            <div class="section">
-                <h3>Line Stats</h3>
-                <div class="kv"><span>WIP</span><strong id="statWip">0</strong></div>
-                <div class="kv"><span>Produced</span><strong id="statProduced">0</strong></div>
-                <div class="kv"><span>Passed</span><strong id="statPassed">0</strong></div>
-                <div class="kv"><span>Rejected</span><strong id="statRejected">0</strong></div>
             </div>
         </aside>
         <div id="splitter" class="splitter" title="Drag to resize"></div>
         <main>
             <div id="scene"></div>
             <div id="tooltip" class="tooltip"></div>
+            <div id="statusbar" class="statusbar">
+                <span><span id="sbConn" class="dot bad"></span>MQTT</span>
+                <span class="muted">Speed: <strong id="sbSpeed">0.00</strong> m/s</span>
+                <span class="muted">WIP: <strong id="sbWip">0</strong></span>
+                <span class="muted">Produced: <strong id="sbProduced">0</strong></span>
+                <span class="muted">Passed: <strong id="sbPassed">0</strong></span>
+                <span class="muted">Rejected: <strong id="sbRejected">0</strong></span>
+            </div>
         </main>
     </div>
 
@@ -465,6 +640,8 @@
 
             $('#convSpeed').value = state.conveyor01.speedSet;
             $('#convSpeedVal').textContent = state.conveyor01.speedActual.toFixed(2);
+            const sbSpeed = document.getElementById('sbSpeed');
+            if (sbSpeed) sbSpeed.textContent = state.conveyor01.speedActual.toFixed(2);
             // removed pump/tank UI
             $('#qcRate').value = state.qc01.passRate;
             $('#qcRateVal').textContent = state.qc01.passRate.toFixed(2);
@@ -478,16 +655,23 @@
                 const wip = line.items.length;
                 const c = line.counts || { produced: 0, passed: 0, rejected: 0 };
                 const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
-                setText('statWip', wip);
-                setText('statProduced', c.produced || 0);
-                setText('statPassed', c.passed || 0);
-                setText('statRejected', c.rejected || 0);
+                // status bar values
+                setText('sbWip', wip);
+                setText('sbProduced', c.produced || 0);
+                setText('sbPassed', c.passed || 0);
+                setText('sbRejected', c.rejected || 0);
             }
 
             const conn = $('#connState');
             conn.textContent = state.connected ? 'Connected' : 'Disconnected';
             conn.classList.toggle('ok', state.connected);
             conn.classList.toggle('bad', !state.connected);
+            // status bar dot
+            const sbConn = document.getElementById('sbConn');
+            if (sbConn) {
+                sbConn.classList.toggle('ok', state.connected);
+                sbConn.classList.toggle('bad', !state.connected);
+            }
 
             const dataPill = $('#dataState');
             if (state.dataCount > 0) {
@@ -744,12 +928,24 @@
             dir.castShadow = false;
             scene.add(dir);
 
+
             // Floor
             const floorGeo = new THREE.PlaneGeometry(100, 100);
-            const floorMat = new THREE.MeshStandardMaterial({ color: 0x1b213d, roughness: 0.9, metalness: 0.1 });
+            // subtle checker for factory tiles
+            const floorCanvas = document.createElement('canvas'); floorCanvas.width = 256; floorCanvas.height = 256;
+            const fctx = floorCanvas.getContext('2d');
+            for (let y = 0; y < 8; y++) {
+                for (let x = 0; x < 8; x++) {
+                    fctx.fillStyle = ((x + y) % 2 === 0) ? '#1a213c' : '#1c2440';
+                    fctx.fillRect(x * 32, y * 32, 32, 32);
+                }
+            }
+            const floorTex = new THREE.CanvasTexture(floorCanvas); floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(8, 8);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x1b213d, roughness: 0.95, metalness: 0.05, map: floorTex });
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.rotation.x = -Math.PI / 2;
             scene.add(floor);
+
 
             // Helper: procedural belt texture
             function createBeltTexture() {
@@ -880,7 +1076,11 @@
                 beam.rotation.y = yaw + Math.PI / 2;
 
                 scene.add(tx); scene.add(rx); scene.add(beam);
-                const pe = { id, beltId, sPos, blocked: 0, beam };
+                // Attach pick metadata to existing components (no clones)
+                tx.userData.sensor = { type: 'photoeye', id, beltId, sPos };
+                rx.userData.sensor = { type: 'photoeye', id, beltId, sPos };
+                beam.userData.sensor = { type: 'photoeye', id, beltId, sPos };
+                const pe = { id, beltId, sPos, blocked: 0, beam, tx, rx };
                 state.line.photoeyes.push(pe);
                 return pe;
             }
@@ -990,6 +1190,7 @@
                 cam.position.set(p.x, top.position.y + 0.1, p.z);
                 cam.rotation.y = yaw; // align cosmetically with belt travel
                 group.add(cam);
+                group.userData.sensor = { type: 'vision', id, beltId, sPos };
                 scene.add(group);
                 state.line.vision.push({ id, beltId, sPos, detectedId: null, group });
                 return group;
@@ -1002,6 +1203,35 @@
             objs.itemsGroup = new THREE.Group();
             scene.add(objs.itemsGroup);
 
+            // HMI screens at ends of belts B and C
+            function makeHMIScreen(id, nearBeltId, yawOffset = 0) {
+                const b = state.line.belts[nearBeltId]; if (!b) return null;
+                const end = b.start.clone().add(b.dir.clone().multiplyScalar(b.length + 0.3));
+                // offset to the side of belt by its perpendicular
+                const perp = new THREE.Vector3(-b.dir.z, 0, b.dir.x).normalize();
+                const side = end.clone().add(perp.multiplyScalar(0.9));
+                const stand = new THREE.Group();
+                const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.9, 12), new THREE.MeshStandardMaterial({ color: 0x4a5878 }));
+                pole.position.set(0, 0.45, 0);
+                const screen = new THREE.Mesh(
+                    new THREE.PlaneGeometry(0.9, 0.55),
+                    // Use white so the canvas texture is not multiplied/dimmed
+                    new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide })
+                );
+                screen.position.set(0, 1.1, 0);
+                // face the belt: plane faces +Z of its local; align plane normal to belt direction
+                const yaw = Math.atan2(b.dir.z, b.dir.x) + yawOffset;
+                stand.add(pole, screen);
+                stand.position.copy(side);
+                stand.rotation.y = yaw;
+                scene.add(stand);
+                objs[id] = { group: stand, screen };
+                return objs[id];
+            }
+            makeHMIScreen('hmiB', 'beltB');
+            // Rotate HMI on C by 90 degrees clockwise
+            makeHMIScreen('hmiC', 'beltC', -Math.PI / 2);
+
             // Raycaster for picking
             raycaster = new THREE.Raycaster();
             mouse = new THREE.Vector2();
@@ -1010,6 +1240,25 @@
             window.addEventListener('resize', onResize);
             renderer.domElement.addEventListener('mousemove', onMouseMove);
             renderer.domElement.addEventListener('click', onClick);
+        }
+
+        // Collapsible sections in sidebar
+        function setupCollapsibles() {
+            const sections = document.querySelectorAll('aside .section');
+            sections.forEach(sec => {
+                const h = sec.querySelector('h3');
+                if (!h) return;
+                h.addEventListener('click', () => sec.classList.toggle('collapsed'));
+            });
+            // Default-collapse MQTT to declutter
+            sections.forEach(sec => {
+                const h = sec.querySelector('h3');
+                if (h && /mqtt/i.test(h.textContent || '')) sec.classList.add('collapsed');
+            });
+            const btnEx = document.getElementById('btnExpandAll');
+            const btnCol = document.getElementById('btnCollapseAll');
+            if (btnEx) btnEx.addEventListener('click', () => sections.forEach(s => s.classList.remove('collapsed')));
+            if (btnCol) btnCol.addEventListener('click', () => sections.forEach(s => s.classList.add('collapsed')));
         }
 
         function onResize() {
@@ -1035,25 +1284,64 @@
             });
         })();
 
+        let tooltipLock = null; // { type, id } or null
+        function setTooltip(e, text) {
+            tooltipEl.style.left = e.clientX + 'px';
+            tooltipEl.style.top = e.clientY + 'px';
+            tooltipEl.style.display = 'block';
+            tooltipEl.textContent = text;
+        }
+
         function onMouseMove(e) {
             const rect = renderer.domElement.getBoundingClientRect();
             mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
             mouse.y = - ((e.clientY - rect.top) / rect.height) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
-            const hits = raycaster.intersectObjects([objs.conveyorBelt], true);
-            if (hits.length) {
-                const o = hits[0].object;
-                tooltipEl.style.left = e.clientX + 'px';
-                tooltipEl.style.top = e.clientY + 'px';
-                tooltipEl.style.display = 'block';
-                if (o === objs.conveyorBelt) { tooltipEl.textContent = `Conveyor speed: ${state.conveyor01.speedActual.toFixed(2)} m/s`; }
-            } else {
+            const targetList = [objs.conveyorBelt];
+            // add sensor meshes (photoeye parts and vision groups)
+            if (state.line.photoeyes) state.line.photoeyes.forEach(pe => { if (pe.tx) targetList.push(pe.tx); if (pe.rx) targetList.push(pe.rx); if (pe.beam) targetList.push(pe.beam); });
+            if (state.line.vision) state.line.vision.forEach(v => v.group && targetList.push(v.group));
+            const hits = raycaster.intersectObjects(targetList, true);
+            if (hits.length && !tooltipLock) {
+                const obj = hits[0].object;
+                // find root with userData.sensor
+                let p = obj; let sensor = null;
+                while (p) { if (p.userData && p.userData.sensor) { sensor = p.userData.sensor; break; } p = p.parent; }
+                if (sensor && sensor.type === 'photoeye') {
+                    const pe = state.line.photoeyes.find(x => x.id === sensor.id);
+                    const val = pe ? pe.blocked : 0;
+                    setTooltip(e, `Photoeye ${sensor.id}\nBelt: ${sensor.beltId}\nBlocked: ${val}`);
+                } else if (sensor && sensor.type === 'vision') {
+                    const vg = state.line.vision.find(x => x.id === sensor.id);
+                    const tag = vg && vg.detected ? vg.detected : { pieceID: '', orderID: '', type: '', start_timestamp: '' };
+                    setTooltip(e, `Vision ${sensor.id}\nBelt: ${sensor.beltId}\nPiece: ${tag.pieceID || '(none)'}\nOrder: ${tag.orderID || ''}\nType: ${tag.type || ''}`);
+                } else if (obj === objs.conveyorBelt) {
+                    setTooltip(e, `Conveyor speed: ${state.conveyor01.speedActual.toFixed(2)} m/s`);
+                } else {
+                    tooltipEl.style.display = 'none';
+                }
+            } else if (!tooltipLock) {
                 tooltipEl.style.display = 'none';
             }
         }
 
         function onClick(e) {
-            // Could expand: open detailed panel for selected equipment
+            // Toggle tooltip lock on sensor click
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = - ((e.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const targets = [];
+            if (state.line.photoeyes) state.line.photoeyes.forEach(pe => { if (pe.tx) targets.push(pe.tx); if (pe.rx) targets.push(pe.rx); if (pe.beam) targets.push(pe.beam); });
+            if (state.line.vision) state.line.vision.forEach(v => v.group && targets.push(v.group));
+            const hits = raycaster.intersectObjects(targets, true);
+            if (hits.length) {
+                let p = hits[0].object; let sensor = null;
+                while (p) { if (p.userData && p.userData.sensor) { sensor = p.userData.sensor; break; } p = p.parent; }
+                if (sensor) { tooltipLock = (tooltipLock && tooltipLock.id === sensor.id) ? null : sensor; }
+            } else {
+                tooltipLock = null;
+            }
         }
 
         function render3D(dt) {
@@ -1082,6 +1370,37 @@
                 d.angle = lerp(d.angle, d.targetAngle, 0.1);
                 d.pivot.rotation.y = d.angle;
             }
+
+            // Update HMI screens with latest vision reads for B and C
+            function updateHMIScreen(hmiId, visionIdPrefix) {
+                const h = objs[hmiId]; if (!h || !h.screen) return;
+                const vg = (state.line.vision || []).find(v => v.id.startsWith(visionIdPrefix));
+                const t = vg && vg.detected ? vg.detected : null;
+                // draw to canvas texture for screen
+                if (!h.canvas) {
+                    h.canvas = document.createElement('canvas'); h.canvas.width = 256; h.canvas.height = 160; h.ctx = h.canvas.getContext('2d');
+                    h.tex = new THREE.CanvasTexture(h.canvas);
+                    h.tex.anisotropy = 4;
+                    h.screen.material.map = h.tex;
+                    h.screen.material.color.set(0xffffff);
+                    h.screen.material.needsUpdate = true;
+                }
+                const ctx = h.ctx; const c = h.canvas;
+                // High-contrast black background with subtle border
+                ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, c.width, c.height);
+                ctx.strokeStyle = '#555555'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, c.width - 2, c.height - 2);
+                ctx.fillStyle = '#ffffff'; ctx.font = 'bold 14px sans-serif'; ctx.fillText('Vision Readout', 10, 20);
+                ctx.fillStyle = '#ffffff'; ctx.font = 'bold 16px monospace';
+                ctx.fillText('Piece:', 10, 50);
+                ctx.fillText(t ? (t.pieceID || '') : '(none)', 80, 50);
+                ctx.font = '12px monospace'; ctx.fillStyle = '#ffffff';
+                ctx.fillText('Order: ' + (t ? (t.orderID || '') : ''), 10, 75);
+                ctx.fillText('Type : ' + (t ? (t.type || '') : ''), 10, 95);
+                ctx.fillText('Start: ' + (t ? (t.start_timestamp || '') : ''), 10, 115);
+                h.tex.needsUpdate = true;
+            }
+            updateHMIScreen('hmiB', 'vgB_');
+            updateHMIScreen('hmiC', 'vgC_');
 
             controls.update();
             renderer.render(scene, camera);
@@ -1281,6 +1600,7 @@
 
         // Init (autonomous)
         setup3D();
+        setupCollapsibles();
         state.conveyor01.enabled = true;
         state.conveyor01.speedSet = 1.0;
         // no pump/tank in simplified layout
