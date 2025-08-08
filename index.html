@@ -431,7 +431,7 @@
                 <h3>MQTT</h3>
                 <div class="section-body">
                     <label>Broker URL (WS)</label>
-                    <input id="mqttUrl" placeholder="wss://iot.coreflux.cloud:443/mqtt" />
+                    <input id="mqttUrl" placeholder="ws://iot.coreflux.cloud:5000/mqtt" />
                     <div class="row">
                         <div>
                             <label>User</label>
@@ -606,7 +606,7 @@
         const cfg = {
             baseTopic: randomBase,
             qos: 1,
-            mqtt: { url: 'wss://iot.coreflux.cloud:443/mqtt', user: '', pass: '' }
+            mqtt: { url: 'ws://iot.coreflux.cloud:5000/mqtt', user: '', pass: '' }
         };
         const state = {
             running: false,
@@ -627,6 +627,7 @@
             // MQTT
             client: null,
             connected: false,
+            connecting: false,
             dataCount: 0,
             lastDataTs: 0,
             alarms: []
@@ -638,10 +639,11 @@
 
         // Update UI from state
         function syncUI() {
-            $('#mqttUrl').value = cfg.mqtt.url;
-            $('#mqttUser').value = cfg.mqtt.user;
-            $('#mqttPass').value = cfg.mqtt.pass;
-            $('#baseTopic').value = cfg.baseTopic;
+            // Only update MQTT fields if they're not currently being edited
+            const mqttUrl = $('#mqttUrl'); if (mqttUrl && mqttUrl !== document.activeElement) mqttUrl.value = cfg.mqtt.url;
+            const mqttUser = $('#mqttUser'); if (mqttUser && mqttUser !== document.activeElement) mqttUser.value = cfg.mqtt.user;
+            const mqttPass = $('#mqttPass'); if (mqttPass && mqttPass !== document.activeElement) mqttPass.value = cfg.mqtt.pass;
+            const baseTopic = $('#baseTopic'); if (baseTopic && baseTopic !== document.activeElement) baseTopic.value = cfg.baseTopic;
             $('#qos').value = String(cfg.qos);
             // publish interval control removed
 
@@ -697,7 +699,15 @@
             }
 
             const btnConn = document.getElementById('btnConnect');
-            if (btnConn) btnConn.textContent = state.connected ? 'Disconnect' : 'Connect';
+            if (btnConn) {
+                if (state.connecting) {
+                    btnConn.textContent = 'Connecting...';
+                    btnConn.disabled = true;
+                } else {
+                    btnConn.textContent = state.connected ? 'Disconnect' : 'Connect';
+                    btnConn.disabled = false;
+                }
+            }
 
             // Beacon
             // beacon removed
@@ -736,7 +746,12 @@
                 document.body.appendChild(el);
             }
             el.textContent = msg;
-            el.style.background = kind === 'error' ? 'rgba(255,77,79,0.95)' : 'rgba(53,185,255,0.95)';
+            // Light green for success, red for error
+            if (kind === 'success') {
+                el.style.background = 'rgba(87,211,140,0.95)'; // light green
+            } else {
+                el.style.background = 'rgba(255,77,79,0.95)'; // red for error
+            }
             el.style.display = 'block';
             clearTimeout(el._t);
             el._t = setTimeout(() => { el.style.display = 'none'; }, ms);
@@ -745,6 +760,26 @@
         // MQTT connect/disconnect
         function connectMQTT() {
             if (state.client) { try { state.client.end(true); } catch (e) { } }
+            state.connecting = true;
+            state.connected = false;
+            syncUI();
+
+            // Set a 5-second timeout for the connecting state
+            const connectingTimeout = setTimeout(() => {
+                if (state.connecting) {
+                    state.connecting = false;
+                    state.connected = false;
+                    syncUI();
+                    log('MQTT connection timeout after 5 seconds');
+                    showToast('Connection timeout - failed to connect within 5 seconds', 'error');
+                    // Clean up the client
+                    if (state.client) {
+                        try { state.client.end(true); } catch (e) { }
+                        state.client = null;
+                    }
+                }
+            }, 5000);
+
             const opts = {
                 username: cfg.mqtt.user || undefined,
                 password: cfg.mqtt.pass || undefined,
@@ -755,10 +790,28 @@
                 clean: true,
             };
             log(`Connecting MQTT ${cfg.mqtt.url} ...`);
-            state.client = mqtt.connect(cfg.mqtt.url, opts);
+
+            try {
+                state.client = mqtt.connect(cfg.mqtt.url, opts);
+            } catch (e) {
+                // Handle synchronous errors (e.g., invalid URL format)
+                clearTimeout(connectingTimeout);
+                state.connecting = false;
+                state.connected = false;
+                syncUI();
+                log('MQTT connection error (sync): ' + e.message);
+                showToast('MQTT connection failed: ' + e.message, 'error');
+                return;
+            }
+
             const c = state.client;
             c.on('connect', () => {
-                state.connected = true; syncUI(); log('MQTT connected');
+                clearTimeout(connectingTimeout); // Clear the timeout on successful connect
+                state.connecting = false;
+                state.connected = true;
+                syncUI();
+                log('MQTT connected');
+                showToast('MQTT connected successfully', 'success', 2000);
                 // subscribe to actuator setpoints & commands
                 const subs = [
                     `${cfg.baseTopic}/+/+/actuators/+`,
@@ -767,8 +820,28 @@
                 ];
                 subs.forEach(s => c.subscribe(s, { qos: cfg.qos }));
             });
-            c.on('close', () => { state.connected = false; syncUI(); log('MQTT disconnected'); });
-            c.on('error', (e) => { log('MQTT error: ' + e.message); showToast('MQTT connection failed: ' + e.message, 'error'); });
+            c.on('close', () => {
+                clearTimeout(connectingTimeout); // Clear the timeout on close
+                state.connecting = false;
+                state.connected = false;
+                syncUI();
+                log('MQTT disconnected');
+            });
+            c.on('error', (e) => {
+                clearTimeout(connectingTimeout); // Clear the timeout on error
+                state.connecting = false;
+                state.connected = false;
+                syncUI();
+                log('MQTT error: ' + e.message);
+                showToast('MQTT connection failed: ' + e.message, 'error');
+            });
+            c.on('offline', () => {
+                clearTimeout(connectingTimeout); // Clear the timeout on offline
+                state.connecting = false;
+                state.connected = false;
+                syncUI();
+                log('MQTT went offline');
+            });
             c.on('message', (t, payload) => handleIncoming(t, payload));
         }
 
@@ -1825,6 +1898,9 @@
 
         // UI events
         $('#btnConnect').addEventListener('click', () => {
+            // Don't allow clicking while connecting
+            if (state.connecting) return;
+
             cfg.mqtt.url = $('#mqttUrl').value || cfg.mqtt.url;
             cfg.mqtt.user = $('#mqttUser').value;
             cfg.mqtt.pass = $('#mqttPass').value;
