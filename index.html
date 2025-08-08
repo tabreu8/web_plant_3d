@@ -424,8 +424,8 @@
         </header>
         <aside>
             <div class="row no-flex" style="justify-content: space-between; margin: 2px 2px 8px 2px;">
-                <button id="btnExpandAll" class="inline" style="padding:4px 8px">Expand all</button>
-                <button id="btnCollapseAll" class="inline" style="padding:4px 8px">Collapse all</button>
+                <button id="btnExpandAll" class="inline" style="padding:4px 8px">Expand All</button>
+                <button id="btnCollapseAll" class="inline" style="padding:4px 8px">Collapse All</button>
             </div>
             <div class="section">
                 <h3>MQTT</h3>
@@ -458,8 +458,7 @@
                     </div>
                     <div class="row">
                         <div>
-                            <label>Publish Interval (ms)</label>
-                            <input id="pubInterval" type="number" value="1000" />
+                            <!-- Publish interval removed; simulator uses a fixed internal interval -->
                         </div>
                         <div></div>
                     </div>
@@ -607,7 +606,6 @@
         const cfg = {
             baseTopic: randomBase,
             qos: 1,
-            pubMs: 1000,
             mqtt: { url: 'wss://iot.coreflux.cloud:443/mqtt', user: '', pass: '' }
         };
         const state = {
@@ -645,7 +643,7 @@
             $('#mqttPass').value = cfg.mqtt.pass;
             $('#baseTopic').value = cfg.baseTopic;
             $('#qos').value = String(cfg.qos);
-            $('#pubInterval').value = cfg.pubMs;
+            // publish interval control removed
 
             $('#convSpeed').value = state.conveyor01.speedSet;
             $('#convSpeedVal').textContent = state.conveyor01.speedActual.toFixed(2);
@@ -718,13 +716,39 @@
         // MQTT topic helpers
         const topic = (area, equip, type, name) => `${cfg.baseTopic}/${area}/${equip}/${type}/${name}`;
 
+        // Simple toast for error messages
+        function showToast(msg, kind = 'error', ms = 3000) {
+            let el = document.getElementById('toast');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'toast';
+                el.style.position = 'fixed';
+                el.style.right = '16px';
+                el.style.bottom = '16px';
+                el.style.zIndex = '9999';
+                el.style.maxWidth = '360px';
+                el.style.padding = '10px 12px';
+                el.style.borderRadius = '8px';
+                el.style.fontSize = '13px';
+                el.style.background = 'rgba(255,77,79,0.95)';
+                el.style.color = '#fff';
+                el.style.boxShadow = '0 6px 16px rgba(0,0,0,.3)';
+                document.body.appendChild(el);
+            }
+            el.textContent = msg;
+            el.style.background = kind === 'error' ? 'rgba(255,77,79,0.95)' : 'rgba(53,185,255,0.95)';
+            el.style.display = 'block';
+            clearTimeout(el._t);
+            el._t = setTimeout(() => { el.style.display = 'none'; }, ms);
+        }
+
         // MQTT connect/disconnect
         function connectMQTT() {
             if (state.client) { try { state.client.end(true); } catch (e) { } }
             const opts = {
                 username: cfg.mqtt.user || undefined,
                 password: cfg.mqtt.pass || undefined,
-                reconnectPeriod: 2000,
+                reconnectPeriod: 0,
                 keepalive: 60,
                 connectTimeout: 10_000,
                 protocolVersion: 4,
@@ -743,28 +767,9 @@
                 ];
                 subs.forEach(s => c.subscribe(s, { qos: cfg.qos }));
             });
-            c.on('reconnect', () => log('MQTT reconnecting...'));
             c.on('close', () => { state.connected = false; syncUI(); log('MQTT disconnected'); });
-            c.on('error', (e) => log('MQTT error: ' + e.message));
+            c.on('error', (e) => { log('MQTT error: ' + e.message); showToast('MQTT connection failed: ' + e.message, 'error'); });
             c.on('message', (t, payload) => handleIncoming(t, payload));
-        }
-
-        // Try local broker first; fallback to public EMQX if not reachable quickly
-        function connectWithFallback() {
-            const testUrl = cfg.mqtt.url;
-            const tester = mqtt.connect(testUrl, { reconnectPeriod: 0, connectTimeout: 3000, clean: true });
-            let decided = false;
-            tester.on('connect', () => { if (decided) return; decided = true; tester.end(true); cfg.mqtt.url = testUrl; connectMQTT(); });
-            function fallback() {
-                if (decided) return; decided = true; tester.end(true);
-                // Fallback to a public EMQX broker if the configured broker is unreachable
-                cfg.mqtt.url = 'wss://broker.emqx.io:8084/mqtt';
-                $('#mqttUrl').value = cfg.mqtt.url;
-                log('Falling back to public EMQX broker');
-                connectMQTT();
-            }
-            tester.on('error', fallback);
-            tester.on('close', fallback);
         }
 
         function publish(t, obj) {
@@ -832,6 +837,7 @@
         // Simulation loop
         let lastMs = performance.now();
         let pubAcc = 0;
+        const PUB_INTERVAL_MS = 1000; // fixed publish interval
         const sensors = {
             // return value and unit
             conveyor_speed() {
@@ -871,7 +877,7 @@
                 state.alarms = [];
 
                 pubAcc += dt * 1000;
-                if (pubAcc >= cfg.pubMs) {
+                if (pubAcc >= PUB_INTERVAL_MS) {
                     pubAcc = 0;
                     // Bundle publish: full JSON + per-field subtopics
                     const pub = (tpc, obj) => publishBundle(tpc, obj);
@@ -1825,7 +1831,7 @@
             // Preserve randomized default if the input is empty
             cfg.baseTopic = $('#baseTopic').value || cfg.baseTopic;
             cfg.qos = Number($('#qos').value) || 1;
-            cfg.pubMs = clamp(Number($('#pubInterval').value) || 1000, 200, 10000);
+            // publish interval setting removed
             if (state.connected && state.client) {
                 try { state.client.end(true); } catch (e) { }
                 state.client = null;
@@ -1876,7 +1882,7 @@
         state.conveyor01.enabled = true;
         state.conveyor01.speedSet = 1.0;
         // no pump/tank in simplified layout
-        connectWithFallback();
+        // Do not auto-connect to MQTT; use the Connect button
         state.running = true;
         syncUI();
         syncProductionUI(true);

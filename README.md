@@ -1,4 +1,7 @@
-<h1 align="center">3D Industrial Plant Simulator</h1>
+<h1 align="center">3D Industrial Plant SimulatoThen click "Connect" in the app. By default the app points to `wss://iot.coreflux.cloud:443/mqtt`.
+You can override the URL, username, and password in the sidebar. The base topic is randomized on each page load (e.g., `plant-abc123`).
+
+Note: The Connect/Disconnect button lives in the sidebar under the MQTT widget; no auto-connect or fallback broker.1>
 
 <p align="center">
   A browser-based 3D conveyor line with realistic sensors and MQTT over WebSockets — all in a single HTML file.
