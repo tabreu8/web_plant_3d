@@ -431,7 +431,7 @@
                 <h3>MQTT</h3>
                 <div class="section-body">
                     <label>Broker URL (WS)</label>
-                    <input id="mqttUrl" placeholder="ws://iot.coreflux.cloud:5000/mqtt" />
+                    <input id="mqttUrl" placeholder="ws://localhost:9001" />
                     <div class="row">
                         <div>
                             <label>User</label>
@@ -606,7 +606,7 @@
         const cfg = {
             baseTopic: randomBase,
             qos: 1,
-            mqtt: { url: 'ws://iot.coreflux.cloud:5000/mqtt', user: '', pass: '' }
+            mqtt: { url: 'ws://localhost:9001', user: '', pass: '' }
         };
         const state = {
             running: false,
@@ -1498,11 +1498,7 @@
                 if (!h) return;
                 h.addEventListener('click', () => sec.classList.toggle('collapsed'));
             });
-            // Default-collapse MQTT to declutter
-            sections.forEach(sec => {
-                const h = sec.querySelector('h3');
-                if (h && /mqtt/i.test(h.textContent || '')) sec.classList.add('collapsed');
-            });
+
             const btnEx = document.getElementById('btnExpandAll');
             const btnCol = document.getElementById('btnCollapseAll');
             if (btnEx) btnEx.addEventListener('click', () => sections.forEach(s => s.classList.remove('collapsed')));
