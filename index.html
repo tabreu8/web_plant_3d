@@ -1406,6 +1406,79 @@
             renderer.render(scene, camera);
         }
 
+        // Procedural item models
+        function roundedRectShape(w, h, r = 0.08) {
+            const s = new THREE.Shape();
+            const hw = w / 2, hh = h / 2, rr = Math.min(r, hw, hh);
+            s.moveTo(-hw + rr, -hh);
+            s.lineTo(hw - rr, -hh);
+            s.quadraticCurveTo(hw, -hh, hw, -hh + rr);
+            s.lineTo(hw, hh - rr);
+            s.quadraticCurveTo(hw, hh, hw - rr, hh);
+            s.lineTo(-hw + rr, hh);
+            s.quadraticCurveTo(-hw, hh, -hw, hh - rr);
+            s.lineTo(-hw, -hh + rr);
+            s.quadraticCurveTo(-hw, -hh, -hw + rr, -hh);
+            return s;
+        }
+
+        function makeCrate(size) {
+            const height = size;
+            const w = size, d = size;
+            const shape = roundedRectShape(w, d, size * 0.08);
+            const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false, curveSegments: 8, steps: 1 });
+            geo.rotateX(-Math.PI / 2); // depth -> Y
+            geo.center();
+            const mat = new THREE.MeshStandardMaterial({ color: 0x8ea3b7, metalness: 0.05, roughness: 0.85 });
+            const crate = new THREE.Mesh(geo, mat);
+            // flush top cap (slight inset) for a more finished look
+            const capMat = new THREE.MeshStandardMaterial({ color: 0x7b8ba0, metalness: 0.08, roughness: 0.7 });
+            const cap = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.96, d * 0.96), capMat);
+            cap.rotation.x = -Math.PI / 2; cap.position.y = height / 2 + 0.001;
+            const group = new THREE.Group();
+            group.add(crate, cap);
+            group.userData.dim = { height };
+            return group;
+        }
+
+        function makeBarrel(size) {
+            const height = size;
+            // Make the barrel wide enough to comfortably fit the QR (0.7*size square => ~0.99*size diagonal, so r >= ~0.5*size)
+            const rBase = size * 0.52; // broader top for QR
+            const bulge = rBase * 0.06; // subtle bulge
+            const pts = [];
+            const steps = 12;
+            for (let i = 0; i <= steps; i++) {
+                const y = (i / steps) * height - height / 2; // -h/2..h/2
+                const t = i / steps;
+                const radius = rBase + bulge * Math.sin(Math.PI * t);
+                pts.push(new THREE.Vector2(radius, y));
+            }
+            const geo = new THREE.LatheGeometry(pts, 32);
+            const mat = new THREE.MeshStandardMaterial({ color: 0xaab3c0, metalness: 0.08, roughness: 0.8 });
+            const barrel = new THREE.Mesh(geo, mat);
+            // Top cap so it's not transparent
+            const capMat = new THREE.MeshStandardMaterial({ color: 0x9aa4b2, metalness: 0.1, roughness: 0.75, side: THREE.DoubleSide });
+            const topCap = new THREE.Mesh(new THREE.CircleGeometry(rBase * 0.985, 48), capMat);
+            topCap.rotation.x = -Math.PI / 2;
+            topCap.position.y = height / 2 + 0.0005;
+            // Hoops
+            const hoopMat = new THREE.MeshStandardMaterial({ color: 0x6c7688, metalness: 0.3, roughness: 0.4 });
+            const hoops = new THREE.Group();
+            const hoopR = rBase + bulge + 0.002;
+            [-0.32, 0.0, 0.32].forEach(pos => {
+                const tGeo = new THREE.TorusGeometry(hoopR, 0.006, 8, 56);
+                const tMesh = new THREE.Mesh(tGeo, hoopMat);
+                tMesh.rotation.x = Math.PI / 2;
+                tMesh.position.y = pos * height;
+                hoops.add(tMesh);
+            });
+            const group = new THREE.Group();
+            group.add(barrel, topCap, hoops);
+            group.userData.dim = { height };
+            return group;
+        }
+
         // Production line: items moving on belts with QC routing
         let itemSeq = 0; let spawnAcc = 0; let spawnAlt = false;
         function spawnItem() {
@@ -1418,19 +1491,8 @@
             const minS = po.largeOnly ? 0.46 : 0.32;
             const maxS = po.largeOnly ? 0.62 : 0.46;
             const size = minS + Math.random() * (maxS - minS);
-            let geom, mat, baseColor;
-            if (isCylinder) {
-                // Make cylinders wider so the square QR fits inside the circular top.
-                // For QR side = 0.9*size, need r >= 0.636*size; use 0.68 for margin.
-                const r = size * 0.68;
-                geom = new THREE.CylinderGeometry(r, r, size, 24);
-                baseColor = 0xd9b3ff; // lilac for cylinders
-            } else {
-                geom = new THREE.BoxGeometry(size, size, size);
-                baseColor = 0x9ec9ff; // blue-ish for boxes
-            }
-            mat = new THREE.MeshStandardMaterial({ color: baseColor, metalness: 0.1, roughness: 0.8 });
-            const mesh = new THREE.Mesh(geom, mat);
+
+            const mesh = isCylinder ? makeBarrel(size) : makeCrate(size);
             objs.itemsGroup && objs.itemsGroup.add(mesh);
             const uid = genItemId(po.orderId);
             const startTs = nowISO();
@@ -1440,21 +1502,23 @@
             // Add QR decal on top
             try {
                 const qrTex = makeQRTexture(JSON.stringify(tag), 256);
-                const qrSize = size * 0.9;
+                const qrSize = size * 0.7;
                 const qrPlane = new THREE.Mesh(
                     new THREE.PlaneGeometry(qrSize, qrSize),
                     new THREE.MeshBasicMaterial({ map: qrTex, transparent: true, depthWrite: false })
                 );
-                // position plane just above top surface
-                if (isCylinder) {
-                    qrPlane.position.set(0, size / 2 + 0.002, 0);
-                } else {
-                    qrPlane.position.set(0, size / 2 + 0.002, 0);
-                }
+                const h = (mesh.userData.dim && mesh.userData.dim.height) ? mesh.userData.dim.height : size;
+                qrPlane.position.set(0, h / 2 + 0.002, 0);
                 qrPlane.rotation.x = -Math.PI / 2;
                 mesh.add(qrPlane);
             } catch { }
-            const it = { id: uid, seq: 'itm' + (itemSeq++), poId: po.orderId || null, shape: isCylinder ? 'cyl' : 'box', beltId: 'beltA', s: 0, size, color: mesh.material.color.clone(), good: null, evaluated: false, mesh, tag };
+            const colorClone = new THREE.Color();
+            if (mesh.children[0] && mesh.children[0].material && mesh.children[0].material.color) {
+                colorClone.copy(mesh.children[0].material.color);
+            } else {
+                colorClone.set(0x9ec9ff);
+            }
+            const it = { id: uid, seq: 'itm' + (itemSeq++), poId: po.orderId || null, shape: isCylinder ? 'cyl' : 'box', beltId: 'beltA', s: 0, size, height: size, color: colorClone, good: null, evaluated: false, mesh, tag };
             state.line.items.push(it);
             state.line.counts.produced++;
             return true;
@@ -1465,13 +1529,7 @@
             // Belt surface approx height: detailed top ~0.72-0.76; we used 0.7 base + 0.02 beltSurf offset + 0.06/2
             const beltTop = 0.7 + 0.02 + 0.03; // 0.75
             let halfH = 0.15; // default fallback
-            if (item && item.mesh && item.mesh.geometry && item.shape) {
-                if (item.shape === 'box') {
-                    halfH = item.size / 2;
-                } else if (item.shape === 'cyl') {
-                    halfH = item.size / 2;
-                }
-            }
+            if (item) { halfH = (item.height ? item.height / 2 : (item.size ? item.size / 2 : halfH)); }
             p.y = beltTop + halfH + 0.001; // small epsilon to avoid z-fight
             return p;
         }
@@ -1521,8 +1579,16 @@
                 // update mesh transform
                 const pos = posOnBelt(b, clamp(it.s, 0, 0.999), it);
                 it.mesh.position.copy(pos);
-                if (it.good === null) it.mesh.material.color.copy(it.color);
-                else it.mesh.material.color.set(it.good ? 0x57d38c : 0xff4d4f);
+                // find a primary child mesh to color (first mesh with a material)
+                let targetMesh = null;
+                if (it.mesh) {
+                    if (it.mesh.isMesh && it.mesh.material) targetMesh = it.mesh;
+                    else targetMesh = it.mesh.children.find(c => c.isMesh && c.material) || null;
+                }
+                if (targetMesh && targetMesh.material && targetMesh.material.color) {
+                    if (it.good === null) targetMesh.material.color.copy(it.color);
+                    else targetMesh.material.color.set(it.good ? 0x57d38c : 0xff4d4f);
+                }
             }
 
             // Update photoeyes
