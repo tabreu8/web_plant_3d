@@ -13,11 +13,11 @@
 ## Highlights
 - Detailed conveyors (main + two branches) with moving belt textures and diverter gate
 - Items with unique IDs prefixed by order ID, e.g. `PO-001_ab12cd34`
-- Real, scannable QR code decal on each piece (qrcode-generator)
+- In-line Labelling station on conveyor A (~1/3 length) applies a real, scannable QR label (qrcode-generator)
 - Sensors:
   - Conveyor speed (analog)
   - Photoelectric sensors (start/end on each belt) with visible beam
-  - Vision gates (A start, B end, C end) reading the QR payload
+  - Vision gates (A start after label station, B end, C end) reading the QR payload
   - QC proximity and last result
 - Production Order widget: set `orderID`, choose Box/Cylinder and Large only — affects spawned parts only
 - MQTT over WebSockets with JSON payloads AND per-field subtopics
@@ -47,6 +47,8 @@ chmod +x ./start_mosquitto.sh
 
 Then click “Connect” in the app (defaults to `ws://localhost:9001`, with fallback to a public EMQX WS broker).
 
+Note: The Connect/Disconnect button lives in the sidebar under the MQTT widget; the top bar is kept minimal.
+
 ## Controls at a glance
 - Start / Pause / E‑STOP
 - Conveyor speed slider (also publishes a setpoint topic)
@@ -57,7 +59,7 @@ Then click “Connect” in the app (defaults to `ws://localhost:9001`, with fal
   - `Submit` applies to future spawns only
 
 ## Item identity & QR payload
-Each spawned piece carries a tag and a matching QR code encoding this JSON:
+Each spawned piece carries a tag immediately, and receives its QR label at the Labelling station on belt A. The QR encodes this JSON:
 
 ```json
 {
@@ -68,7 +70,7 @@ Each spawned piece carries a tag and a matching QR code encoding this JSON:
 }
 ```
 
-The visual QR is generated client-side and is scannable with standard QR readers.
+The visual QR is generated client-side and is scannable with standard QR readers. Vision gates publish the latest tag for an item under the sensor.
 
 ## MQTT topics
 Base topic is configurable (default `plant`). JSON payloads are published at the base topic and each field is also published to subtopics (base/<field>) as scalars.
@@ -85,7 +87,7 @@ Sensors (examples):
   { "timestamp": "…", "value": 1, "unit": "bool", "quality": "good", "alarm_state": "normal" }
   ```
 
-- Vision gates: `plant/production/beltA/sensors/vision_start` (and `vision_end` on B/C)
+- Vision gates: `plant/production/beltA/sensors/vision_start` (A is positioned downstream of the Labelling station) and `plant/production/beltB|beltC/sensors/vision_end`
   ```json
   { "timestamp": "…", "pieceID": "PO-001_ab12cd34", "orderID": "PO-001", "type": "large_cylinder", "start_timestamp": "…" }
   ```
@@ -96,6 +98,19 @@ Other:
 - QC last result: `plant/production/qc01/sensors/quality`
 - E‑STOP status: `plant/safety/emergency_stop/sensors/status`
 - Heartbeat: `plant/system/simulator/metrics/heartbeat`
+
+Events:
+- Label applied (at Labelling station): `plant/production/label01/events/applied`
+  ```json
+  {
+    "pieceID": "PO-001_ab12cd34",
+    "orderID": "PO-001",
+    "type": "large_cylinder",
+    "start_timestamp": "…",
+    "station": "label01",
+    "applied_timestamp": "…"
+  }
+  ```
 
 Actuators (subscribed):
 - Conveyor speed setpoint: `plant/production/conveyor01/actuators/speed_setpoint`
@@ -111,7 +126,7 @@ Actuators (subscribed):
 ## Troubleshooting
 - Blank page: ensure WebGL is enabled and use a local server (file:// won’t load modules consistently).
 - MQTT won’t connect: start the Dockerized Mosquitto or use another WS broker; check CORS and WS URL.
-- Vision payloads are empty: make sure items are passing through the gate; adjust speed if needed.
+- Vision payloads are empty: make sure items have passed the Labelling station on A before the A vision gate; adjust speed if needed.
 
 ## License
 This project is provided as-is for demo/education purposes.

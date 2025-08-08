@@ -919,8 +919,9 @@
 
             scene = new THREE.Scene();
 
-            camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
-            camera.position.set(9, 7, 12);
+            camera = new THREE.PerspectiveCamera(58, container.clientWidth / container.clientHeight, 0.1, 1000);
+            // Shift slightly to the right (increase X) and zoom in (reduce Z)
+            camera.position.set(11, 5, 5);
 
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
@@ -1216,7 +1217,7 @@
             makeCatchBox('passCatch', 'beltB');
             makeCatchBox('failCatch', 'beltC');
 
-            // Vision gate sensors (A start, B end, C end)
+            // Vision gate sensors (A after QR station, B end, C end)
             function placeVisionGate(id, beltId, sPos) {
                 const belt = state.line.belts[beltId]; if (!belt) return null;
                 const group = new THREE.Group();
@@ -1259,9 +1260,103 @@
                 state.line.vision.push({ id, beltId, sPos, detectedId: null, group });
                 return group;
             }
-            placeVisionGate('vgA_start', 'beltA', 0.20);
+            placeVisionGate('vgA_start', 'beltA', 0.45);
             placeVisionGate('vgB_end', 'beltB', 0.80);
             placeVisionGate('vgC_end', 'beltC', 0.80);
+
+            // HMI near belt A (opposite side, around mid-length)
+            function makeHMIScreenNearVision(id, vgId) {
+                const vg = (state.line.vision || []).find(v => v.id === vgId);
+                if (!vg) return null;
+                const b = state.line.belts[vg.beltId]; if (!b) return null;
+                const yaw = Math.atan2(b.dir.z, b.dir.x);
+                const perp = new THREE.Vector3(-b.dir.z, 0, b.dir.x).normalize();
+                // Place near the middle of the conveyor length on the opposite side
+                const mid = b.start.clone().add(b.dir.clone().multiplyScalar(b.length * 0.5));
+                const side = mid.add(perp.multiplyScalar(-0.9));
+                const stand = new THREE.Group();
+                const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.9, 12), new THREE.MeshStandardMaterial({ color: 0x4a5878 }));
+                pole.position.set(0, 0.45, 0);
+                const screen = new THREE.Mesh(
+                    new THREE.PlaneGeometry(0.9, 0.55),
+                    new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide })
+                );
+                screen.position.set(0, 1.1, 0);
+                stand.add(pole, screen);
+                stand.position.copy(side);
+                stand.rotation.y = yaw;
+                scene.add(stand);
+                objs[id] = { group: stand, screen };
+                return objs[id];
+            }
+            makeHMIScreenNearVision('hmiA', 'vgA_start');
+
+            // Labelling station on belt A at 1/3 position (applies QR label)
+            function makeLabellingStationOnA() {
+                const belt = state.line.belts['beltA']; if (!belt) return;
+                const sPos = 1 / 3;
+                const p = belt.start.clone().add(belt.dir.clone().multiplyScalar(belt.length * sPos));
+                const yaw = Math.atan2(belt.dir.z, belt.dir.x);
+                const group = new THREE.Group();
+                // two uprights and a roll-based applicator over the belt
+                const railTop = 0.73; // same estimate used for sensors
+                // Taller gantry so it clears the tallest pieces comfortably
+                const h = 0.7;
+                const uprGeo = new THREE.CylinderGeometry(0.04, 0.04, h, 12);
+                const uprMat = new THREE.MeshStandardMaterial({ color: 0x6a7896, metalness: 0.3, roughness: 0.7 });
+                const beltW = 1, railOffset = 0.12, edge = beltW / 2 + railOffset;
+                const perp = new THREE.Vector3(-belt.dir.z, 0, belt.dir.x).normalize();
+                const pL = p.clone().add(perp.clone().multiplyScalar(edge));
+                const pR = p.clone().add(perp.clone().multiplyScalar(-edge));
+                const uL = new THREE.Mesh(uprGeo, uprMat); uL.position.set(pL.x, railTop + h / 2, pL.z);
+                const uR = new THREE.Mesh(uprGeo, uprMat); uR.position.set(pR.x, railTop + h / 2, pR.z);
+                const bar = new THREE.Mesh(new THREE.BoxGeometry(edge * 2 + 0.12, 0.06, 0.10), uprMat);
+                bar.position.set(p.x, railTop + h + 0.03, p.z);
+                bar.rotation.y = yaw + Math.PI / 2; // span across the belt
+                // label roll (paper) + core
+                const rollRadius = 0.10, rollWidth = 0.22;
+                const paperMat = new THREE.MeshStandardMaterial({ color: 0xf5f1e6, metalness: 0.0, roughness: 0.95 });
+                const coreMat = new THREE.MeshStandardMaterial({ color: 0xb0b6bf, metalness: 0.3, roughness: 0.5 });
+                const roll = new THREE.Mesh(new THREE.CylinderGeometry(rollRadius, rollRadius, rollWidth, 48), paperMat);
+                // Axis across the belt; face centerline
+                roll.rotation.set(Math.PI / 2, yaw + Math.PI / 2, 0);
+                // Place slightly upstream of the peel plate
+                const upstream = belt.dir.clone().multiplyScalar(-0.08);
+                const rollPos = p.clone().add(upstream);
+                roll.position.set(rollPos.x, bar.position.y - 0.12, rollPos.z);
+                const core = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, rollWidth + 0.01, 32), coreMat);
+                core.rotation.copy(roll.rotation);
+                core.position.copy(roll.position);
+                // Single guide plate, parallel to the station cross bar
+                const guide = new THREE.Mesh(new THREE.BoxGeometry(edge * 0.8, 0.012, 0.10), new THREE.MeshStandardMaterial({ color: 0x8a95a8, metalness: 0.2, roughness: 0.6 }));
+                guide.position.set(p.x, roll.position.y - 0.10, p.z);
+                guide.rotation.set(0, yaw + Math.PI / 2, 0);
+                // Two supports connecting guide to the cross bar (left/right along belt perpendicular)
+                const halfGuide = (edge * 0.8) / 2;
+                const anchorOffset = halfGuide - 0.02; // small inset from edges
+                const startY = guide.position.y + 0.006; // guide top surface
+                const endY = bar.position.y - 0.03; // underside of bar
+                const startBase = new THREE.Vector3(guide.position.x, startY, guide.position.z);
+                const endBase = new THREE.Vector3(bar.position.x, endY, bar.position.z);
+                const sL = startBase.clone().add(perp.clone().multiplyScalar(-anchorOffset));
+                const sR = startBase.clone().add(perp.clone().multiplyScalar(anchorOffset));
+                const eL = endBase.clone().add(perp.clone().multiplyScalar(-anchorOffset));
+                const eR = endBase.clone().add(perp.clone().multiplyScalar(anchorOffset));
+                const makeRod = (a, b) => {
+                    const v = new THREE.Vector3().subVectors(b, a);
+                    const len = v.length();
+                    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, len, 10), uprMat);
+                    rod.position.copy(new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5));
+                    rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone().normalize());
+                    return rod;
+                };
+                const supL = makeRod(sL, eL);
+                const supR = makeRod(sR, eR);
+                group.add(uL, uR, bar, roll, core, guide, supL, supR);
+                scene.add(group);
+                objs.labelStationA = { group, sPos };
+            }
+            makeLabellingStationOnA();
 
             // Items container
             objs.itemsGroup = new THREE.Group();
@@ -1463,6 +1558,7 @@
                 ctx.fillText('Start: ' + (t ? (t.start_timestamp || '') : ''), 10, 115);
                 h.tex.needsUpdate = true;
             }
+            updateHMIScreen('hmiA', 'vgA_');
             updateHMIScreen('hmiB', 'vgB_');
             updateHMIScreen('hmiC', 'vgC_');
 
@@ -1579,19 +1675,7 @@
             const sizeClass = size >= 0.42 ? 'large' : 'small';
             const shapeName = isCylinder ? 'cylinder' : 'box';
             const tag = { pieceID: uid, orderID: po.orderId || '', type: `${sizeClass}_${shapeName}`, start_timestamp: startTs };
-            // Add QR decal on top
-            try {
-                const qrTex = makeQRTexture(JSON.stringify(tag), 256);
-                const qrSize = size * 0.7;
-                const qrPlane = new THREE.Mesh(
-                    new THREE.PlaneGeometry(qrSize, qrSize),
-                    new THREE.MeshBasicMaterial({ map: qrTex, transparent: true, depthWrite: false })
-                );
-                const h = (mesh.userData.dim && mesh.userData.dim.height) ? mesh.userData.dim.height : size;
-                qrPlane.position.set(0, h / 2 + 0.002, 0);
-                qrPlane.rotation.x = -Math.PI / 2;
-                mesh.add(qrPlane);
-            } catch { }
+            // NOTE: Do not add QR at spawn; it will be applied at the QR station on belt A
             const colorClone = new THREE.Color();
             if (mesh.children[0] && mesh.children[0].material && mesh.children[0].material.color) {
                 colorClone.copy(mesh.children[0].material.color);
@@ -1633,6 +1717,28 @@
                 if (!b) { items.splice(i, 1); continue; }
                 const v = b.speed;
                 it.s += (v * dt) / Math.max(0.1, b.length);
+                // Apply QR at the Labelling station on belt A (at ~1/3)
+                if (it.beltId === 'beltA' && objs.labelStationA && !it.qrApplied) {
+                    if (Math.abs(it.s - objs.labelStationA.sPos) < 0.02) {
+                        try {
+                            const qrTex = makeQRTexture(JSON.stringify(it.tag), 256);
+                            const qrSize = it.size * 0.7;
+                            const qrPlane = new THREE.Mesh(
+                                new THREE.PlaneGeometry(qrSize, qrSize),
+                                new THREE.MeshBasicMaterial({ map: qrTex, transparent: true, depthWrite: false })
+                            );
+                            const h = it.height || it.size;
+                            qrPlane.position.set(0, h / 2 + 0.002, 0);
+                            qrPlane.rotation.x = -Math.PI / 2;
+                            it.mesh.add(qrPlane);
+                            it.qrApplied = true;
+                            // Publish applied QR payload to MQTT
+                            const payload = Object.assign({ station: 'label01', applied_timestamp: nowISO() }, it.tag || {});
+                            publishBundle(topic('production', 'label01', 'events', 'applied'), payload);
+                        } catch { }
+                    }
+                }
+
                 // Evaluate quality earlier under QC gantry, but do not move diverter yet
                 // Evaluate quality near the intersection (end of beltA)
                 if (it.s >= 0.90 && it.beltId === 'beltA' && !it.evaluated) {
