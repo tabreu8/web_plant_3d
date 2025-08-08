@@ -431,7 +431,7 @@
                 <h3>MQTT</h3>
                 <div class="section-body">
                     <label>Broker URL (WS)</label>
-                    <input id="mqttUrl" placeholder="ws://localhost:9001" />
+                    <input id="mqttUrl" placeholder="wss://iot.coreflux.cloud:443/mqtt" />
                     <div class="row">
                         <div>
                             <label>User</label>
@@ -445,7 +445,7 @@
                     <div class="row">
                         <div>
                             <label>Base Topic</label>
-                            <input id="baseTopic" value="plant" />
+                            <input id="baseTopic" placeholder="plant-xxxxx" />
                         </div>
                         <div>
                             <label>QoS</label>
@@ -595,11 +595,20 @@
         }
 
         // Configuration and in-memory state
+        // Randomize base topic per session to avoid collisions when sharing a broker
+        const randomBase = (() => {
+            try {
+                const a = new Uint32Array(2); crypto.getRandomValues(a);
+                return 'plant-' + [...a].map(x => x.toString(36)).join('').slice(0, 6);
+            } catch {
+                return 'plant-' + Math.random().toString(36).slice(2, 8);
+            }
+        })();
         const cfg = {
-            baseTopic: 'plant',
+            baseTopic: randomBase,
             qos: 1,
             pubMs: 1000,
-            mqtt: { url: 'ws://localhost:9001', user: '', pass: '' }
+            mqtt: { url: 'wss://iot.coreflux.cloud:443/mqtt', user: '', pass: '' }
         };
         const state = {
             running: false,
@@ -748,6 +757,7 @@
             tester.on('connect', () => { if (decided) return; decided = true; tester.end(true); cfg.mqtt.url = testUrl; connectMQTT(); });
             function fallback() {
                 if (decided) return; decided = true; tester.end(true);
+                // Fallback to a public EMQX broker if the configured broker is unreachable
                 cfg.mqtt.url = 'wss://broker.emqx.io:8084/mqtt';
                 $('#mqttUrl').value = cfg.mqtt.url;
                 log('Falling back to public EMQX broker');
@@ -1812,7 +1822,8 @@
             cfg.mqtt.url = $('#mqttUrl').value || cfg.mqtt.url;
             cfg.mqtt.user = $('#mqttUser').value;
             cfg.mqtt.pass = $('#mqttPass').value;
-            cfg.baseTopic = $('#baseTopic').value || 'plant';
+            // Preserve randomized default if the input is empty
+            cfg.baseTopic = $('#baseTopic').value || cfg.baseTopic;
             cfg.qos = Number($('#qos').value) || 1;
             cfg.pubMs = clamp(Number($('#pubInterval').value) || 1000, 200, 10000);
             if (state.connected && state.client) {

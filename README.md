@@ -45,7 +45,8 @@ chmod +x ./start_mosquitto.sh
 # Broker WS URL: ws://localhost:9001
 ```
 
-Then click “Connect” in the app (defaults to `ws://localhost:9001`, with fallback to a public EMQX WS broker).
+Then click “Connect” in the app. By default the app points to `wss://iot.coreflux.cloud:443/mqtt`.
+If that’s unreachable from your network, it will fall back to a public EMQX WS broker. You can also override the URL in the sidebar. The base topic is randomized on each page load (e.g., `plant-abc123`).
 
 Note: The Connect/Disconnect button lives in the sidebar under the MQTT widget; the top bar is kept minimal.
 
@@ -73,7 +74,7 @@ Each spawned piece carries a tag immediately, and receives its QR label at the L
 The visual QR is generated client-side and is scannable with standard QR readers. Vision gates publish the latest tag for an item under the sensor.
 
 ## MQTT topics
-Base topic is configurable (default `plant`). JSON payloads are published at the base topic and each field is also published to subtopics (base/<field>) as scalars.
+Base topic is configurable (randomized by default, e.g., `plant-abc123`). JSON payloads are published at the base topic and each field is also published to subtopics (base/<field>) as scalars.
 
 Sensors (examples):
 - Speed: `plant/production/conveyor01/sensors/speed`
