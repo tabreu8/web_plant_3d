@@ -61,6 +61,17 @@
             flex-wrap: wrap;
         }
 
+        .sidebar-toggle {
+            display: none;
+            background: var(--accent);
+            color: white;
+            border: 1px solid var(--accent);
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
         .pill {
             padding: 4px 8px;
             border-radius: 999px;
@@ -404,8 +415,36 @@
                 display: none;
             }
 
+            .conn {
+                flex-wrap: nowrap;
+                gap: 6px;
+            }
+
+            .conn button {
+                padding: 6px 10px;
+                font-size: 13px;
+                white-space: nowrap;
+            }
+
+            .sidebar-toggle {
+                display: block;
+                margin-right: 8px;
+            }
+
             aside {
                 max-height: 45vh;
+                transition: transform 0.3s ease, opacity 0.3s ease;
+                position: relative;
+                z-index: 10;
+            }
+
+            aside.collapsed {
+                transform: translateY(-100%);
+                opacity: 0;
+                pointer-events: none;
+                max-height: 0;
+                padding: 0 12px;
+                overflow: hidden;
             }
         }
     </style>
@@ -416,6 +455,7 @@
         <header>
             <h1>3D Industrial Plant Simulator</h1>
             <div class="conn">
+                <button id="btnSidebarToggle" class="sidebar-toggle">☰ Controls</button>
                 <button id="btnRun" class="inline primary">Start</button>
                 <button id="btnPause" class="inline">Pause</button>
                 <button id="btnEStop" class="inline"
@@ -1505,6 +1545,33 @@
             if (btnCol) btnCol.addEventListener('click', () => sections.forEach(s => s.classList.add('collapsed')));
         }
 
+        function setupSidebarToggle() {
+            const toggleBtn = document.getElementById('btnSidebarToggle');
+            const sidebar = document.querySelector('aside');
+
+            if (!toggleBtn || !sidebar) return;
+
+            // Start with sidebar collapsed on mobile
+            if (window.innerWidth <= 900) {
+                sidebar.classList.add('collapsed');
+                toggleBtn.textContent = '☰ Show Controls';
+            }
+
+            toggleBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('collapsed');
+                const isCollapsed = sidebar.classList.contains('collapsed');
+                toggleBtn.textContent = isCollapsed ? '☰ Show Controls' : '✕ Hide Controls';
+            });
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                if (window.innerWidth > 900) {
+                    sidebar.classList.remove('collapsed');
+                    toggleBtn.textContent = '☰ Controls';
+                }
+            });
+        }
+
         function onResize() {
             const container = document.getElementById('scene');
             camera.aspect = container.clientWidth / container.clientHeight;
@@ -1951,6 +2018,7 @@
         // Init (autonomous)
         setup3D();
         setupCollapsibles();
+        setupSidebarToggle();
         state.conveyor01.enabled = true;
         state.conveyor01.speedSet = 1.0;
         // no pump/tank in simplified layout
