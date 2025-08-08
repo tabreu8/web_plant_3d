@@ -1,0 +1,1295 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>3D Industrial Plant Simulator</title>
+    <style>
+        :root {
+            --bg: #0f1220;
+            --panel: #161a2e;
+            --muted: #8aa0b6;
+            --accent: #35b9ff;
+            --danger: #ff4d4f;
+            --ok: #57d38c;
+            --sidebar: 340px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            background: var(--bg);
+            color: #e8f1ff;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        }
+
+        #app {
+            display: grid;
+            grid-template-columns: var(--sidebar) 6px 1fr;
+            grid-template-rows: 52px 1fr;
+            grid-template-areas: 'top top top' 'left split main';
+            height: 100%;
+        }
+
+        header {
+            grid-area: top;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+            background: #11152a;
+            border-bottom: 1px solid #212649;
+        }
+
+        header h1 {
+            font-size: 16px;
+            margin: 0;
+            opacity: .95;
+        }
+
+        .conn {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .pill {
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            border: 1px solid #2b315c;
+            color: var(--muted);
+        }
+
+        .pill.ok {
+            color: var(--ok);
+            border-color: #2e5644;
+        }
+
+        .pill.bad {
+            color: var(--danger);
+            border-color: #5a2a2b;
+        }
+
+        aside {
+            grid-area: left;
+            background: var(--panel);
+            border-right: 1px solid #212649;
+            overflow: auto;
+            min-width: 240px;
+        }
+
+        .splitter {
+            grid-area: split;
+            cursor: col-resize;
+            background: linear-gradient(to right, transparent 0, #1e2347 40%, #1e2347 60%, transparent 100%);
+        }
+
+        main {
+            grid-area: main;
+            position: relative;
+        }
+
+        #scene {
+            position: absolute;
+            inset: 0;
+        }
+
+        .section {
+            padding: 12px;
+            border-bottom: 1px solid #212649;
+        }
+
+        h3 {
+            margin: 0 0 8px;
+            font-size: 13px;
+            letter-spacing: .2px;
+            color: #cfe2ff;
+        }
+
+        label {
+            font-size: 12px;
+            color: var(--muted);
+            display: block;
+            margin: 6px 0 3px;
+        }
+
+        input,
+        select,
+        button,
+        textarea {
+            width: 100%;
+            background: #0f1326;
+            color: #e8f1ff;
+            border: 1px solid #2b315c;
+            border-radius: 6px;
+            padding: 8px;
+            font-size: 13px;
+        }
+
+        button {
+            background: #13233a;
+            border-color: #274666;
+            cursor: pointer;
+        }
+
+        button.primary {
+            background: #12324e;
+            border-color: #1b6ea7;
+        }
+
+        button.inline {
+            width: auto;
+            padding: 6px 10px;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .row>* {
+            flex: 1;
+        }
+
+        /* Do not stretch children on specific rows */
+        .row.no-flex>* {
+            flex: 0 0 auto;
+        }
+
+        /* Keep checkboxes compact and not full width */
+        input[type="checkbox"] {
+            width: auto;
+            height: auto;
+        }
+
+        .chk {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            width: auto;
+            margin-right: 8px;
+            user-select: none;
+        }
+
+        .kv {
+            font-size: 12px;
+            color: var(--muted);
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 2px 0;
+        }
+
+        .log {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 12px;
+            height: 140px;
+            background: #0b0f1f;
+            padding: 8px;
+            border-radius: 6px;
+            overflow: auto;
+        }
+
+        .alarm {
+            color: var(--danger);
+        }
+
+        /* alarms removed for now */
+
+        .tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: #0b0f1f;
+            border: 1px solid #2b315c;
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #e8f1ff;
+            transform: translate(-50%, -120%);
+            display: none;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        @media (max-width: 900px) {
+            #app {
+                grid-template-columns: 1fr;
+                grid-template-rows: 52px auto 1fr;
+                grid-template-areas: 'top' 'left' 'main';
+            }
+
+            .splitter {
+                display: none;
+            }
+
+            aside {
+                max-height: 45vh;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <header>
+            <h1>3D Industrial Plant Simulator</h1>
+            <div class="conn">
+                <span id="connState" class="pill bad">Disconnected</span>
+                <span id="dataState" class="pill bad">No data</span>
+                <button id="btnConnect" class="inline">Connect</button>
+                <button id="btnRun" class="inline primary">Start</button>
+                <button id="btnPause" class="inline">Pause</button>
+                <button id="btnEStop" class="inline"
+                    style="border-color:#5a2a2b;background:#2a1314;color:#ffb3b3">E-STOP</button>
+            </div>
+        </header>
+        <aside>
+            <div class="section">
+                <h3>MQTT</h3>
+                <label>Broker URL (WS)</label>
+                <input id="mqttUrl" placeholder="ws://localhost:9001" />
+                <div class="row">
+                    <div>
+                        <label>User</label>
+                        <input id="mqttUser" placeholder="optional" />
+                    </div>
+                    <div>
+                        <label>Password</label>
+                        <input id="mqttPass" placeholder="optional" type="password" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div>
+                        <label>Base Topic</label>
+                        <input id="baseTopic" value="plant" />
+                    </div>
+                    <div>
+                        <label>QoS</label>
+                        <select id="qos">
+                            <option>0</option>
+                            <option selected>1</option>
+                            <option>2</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div>
+                        <label>Publish Interval (ms)</label>
+                        <input id="pubInterval" type="number" value="1000" />
+                    </div>
+                    <div>
+                        <label>QoS</label>
+                        <select id="qos">
+                            <option>0</option>
+                            <option selected>1</option>
+                            <option>2</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>Conveyor</h3>
+                <div class="kv"><span>Speed (m/s)</span><strong id="convSpeedVal">0.00</strong></div>
+                <input id="convSpeed" type="range" min="0" max="2" step="0.01" value="0" />
+                <div class="row">
+                    <button id="convStart" class="inline">Start</button>
+                    <button id="convStop" class="inline">Stop</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>QC Station</h3>
+                <div class="kv"><span>Pass Rate Target</span><strong id="qcRateVal">0.90</strong></div>
+                <input id="qcRate" type="range" min="0" max="1" step="0.01" value="0.90" />
+                <div class="kv"><span>Last Result</span><strong id="qcLast">—</strong></div>
+            </div>
+
+            <div class="section">
+                <h3>Production Order</h3>
+                <label>Order ID</label>
+                <input id="poId" placeholder="PO-001" />
+                <div class="row no-flex" style="margin-top:8px">
+                    <label class="chk"><input type="checkbox" id="poBox" checked /> <span>Box</span></label>
+                    <label class="chk"><input type="checkbox" id="poCyl" checked /> <span>Cylinder</span></label>
+                </div>
+                <div class="row no-flex" style="margin-top:6px">
+                    <label class="chk"><input type="checkbox" id="poLarge" /> <span>Large only</span></label>
+                </div>
+                <div class="row" style="margin-top:8px">
+                    <button id="poSubmit" class="inline">Submit</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>Line Stats</h3>
+                <div class="kv"><span>WIP</span><strong id="statWip">0</strong></div>
+                <div class="kv"><span>Produced</span><strong id="statProduced">0</strong></div>
+                <div class="kv"><span>Passed</span><strong id="statPassed">0</strong></div>
+                <div class="kv"><span>Rejected</span><strong id="statRejected">0</strong></div>
+            </div>
+        </aside>
+        <div id="splitter" class="splitter" title="Drag to resize"></div>
+        <main>
+            <div id="scene"></div>
+            <div id="tooltip" class="tooltip"></div>
+        </main>
+    </div>
+
+    <!-- CDNs: Three.js r128, OrbitControls, mqtt.js -->
+    <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <!-- Real QR code generator (synchronous) -->
+    <script src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js"></script>
+
+    <script>
+        // Basic utilities
+        const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+        const lerp = (a, b, t) => a + (b - a) * t;
+        const nowISO = () => new Date().toISOString();
+        // ID + pseudo-QR utilities
+        function genId() {
+            if (window.crypto && crypto.getRandomValues) {
+                const a = new Uint32Array(3); crypto.getRandomValues(a);
+                return [...a].map(x => x.toString(36)).join('-');
+            }
+            return Math.random().toString(36).slice(2) + '-' + Date.now().toString(36);
+        }
+        function makeQRTexture(data, size = 128) {
+            const value = (typeof data === 'string') ? data : JSON.stringify(data);
+            // Try real QR generator first
+            if (typeof window !== 'undefined' && typeof window.qrcode === 'function') {
+                const qr = window.qrcode(0, 'M'); // auto version, medium EC
+                qr.addData(value);
+                qr.make();
+                const count = qr.getModuleCount();
+                const canvas = document.createElement('canvas');
+                canvas.width = size; canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size);
+                const marginCells = 4; // quiet zone
+                const scale = Math.floor(size / (count + marginCells * 2)) || 1;
+                const total = scale * (count + marginCells * 2);
+                const offset = Math.floor((size - scale * count) / 2);
+                ctx.fillStyle = '#000';
+                for (let r = 0; r < count; r++) {
+                    for (let c = 0; c < count; c++) {
+                        if (qr.isDark(r, c)) {
+                            ctx.fillRect(offset + c * scale, offset + r * scale, scale, scale);
+                        }
+                    }
+                }
+                const tex = new THREE.CanvasTexture(canvas);
+                tex.anisotropy = 4; tex.needsUpdate = true;
+                return tex;
+            }
+            // Fallback: simple text marker
+            const c = document.createElement('canvas'); c.width = size; c.height = size;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size);
+            ctx.fillStyle = '#000'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('QR', size / 2, size / 2);
+            const tex = new THREE.CanvasTexture(c); tex.anisotropy = 4; tex.needsUpdate = true; return tex;
+        }
+
+        // Item ID builder: <orderId>_<random>
+        function randStr(n = 8) {
+            try {
+                const a = new Uint32Array(2); crypto.getRandomValues(a);
+                return [...a].map(x => x.toString(36)).join('').slice(0, n);
+            } catch {
+                return Math.random().toString(36).slice(2, 2 + n);
+            }
+        }
+        function genItemId(orderId) {
+            const prefix = (orderId || 'PO').toString().trim();
+            return `${prefix}_${randStr(8)}`;
+        }
+
+        // Configuration and in-memory state
+        const cfg = {
+            baseTopic: 'plant',
+            qos: 1,
+            pubMs: 1000,
+            mqtt: { url: 'ws://localhost:9001', user: '', pass: '' }
+        };
+        const state = {
+            running: false,
+            emergency: false,
+            // equipment states
+            conveyor01: { speedSet: 0, speedActual: 0, enabled: false },
+            qc01: { passRate: 0.9, last: null },
+            // production order (affects spawn only)
+            production: { orderId: 'PO-001', filters: { box: true, cylinder: true }, largeOnly: false },
+            // discrete-event line state (belts and items)
+            line: {
+                belts: {}, // id -> { id, start:THREE.Vector3, dir:THREE.Vector3, length:Number, speed:Number, mesh, nextPass, nextFail }
+                items: [], // { id, beltId, s (0..1), size, color, good, evaluated, mesh }
+                counts: { produced: 0, passed: 0, rejected: 0 },
+                photoeyes: [], // { id, beltId, sPos, blocked(0/1), beam:THREE.Mesh }
+                vision: [] // { id, beltId, sPos, detectedId, group }
+            },
+            // MQTT
+            client: null,
+            connected: false,
+            dataCount: 0,
+            lastDataTs: 0,
+            alarms: []
+        };
+
+        // UI wiring
+        const $ = sel => document.querySelector(sel);
+        function log(msg) { console.log(msg); }
+
+        // Update UI from state
+        function syncUI() {
+            $('#mqttUrl').value = cfg.mqtt.url;
+            $('#mqttUser').value = cfg.mqtt.user;
+            $('#mqttPass').value = cfg.mqtt.pass;
+            $('#baseTopic').value = cfg.baseTopic;
+            $('#qos').value = String(cfg.qos);
+            $('#pubInterval').value = cfg.pubMs;
+
+            $('#convSpeed').value = state.conveyor01.speedSet;
+            $('#convSpeedVal').textContent = state.conveyor01.speedActual.toFixed(2);
+            // removed pump/tank UI
+            $('#qcRate').value = state.qc01.passRate;
+            $('#qcRateVal').textContent = state.qc01.passRate.toFixed(2);
+            $('#qcLast').textContent = state.qc01.last === null ? '—' : (state.qc01.last ? 'PASS' : 'FAIL');
+            // Production order UI is synced separately to avoid overriding user checkbox clicks
+            const po = state.production;
+            const elId = document.getElementById('poId'); if (elId && elId !== document.activeElement) elId.value = po.orderId;
+            // line stats
+            const line = state.line;
+            if (line) {
+                const wip = line.items.length;
+                const c = line.counts || { produced: 0, passed: 0, rejected: 0 };
+                const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
+                setText('statWip', wip);
+                setText('statProduced', c.produced || 0);
+                setText('statPassed', c.passed || 0);
+                setText('statRejected', c.rejected || 0);
+            }
+
+            const conn = $('#connState');
+            conn.textContent = state.connected ? 'Connected' : 'Disconnected';
+            conn.classList.toggle('ok', state.connected);
+            conn.classList.toggle('bad', !state.connected);
+
+            const dataPill = $('#dataState');
+            if (state.dataCount > 0) {
+                const age = Math.max(0, Math.floor((Date.now() - state.lastDataTs) / 1000));
+                dataPill.textContent = `Data ${state.dataCount} (last ${age}s)`;
+                dataPill.classList.add('ok');
+                dataPill.classList.remove('bad');
+            } else {
+                dataPill.textContent = 'No data';
+                dataPill.classList.remove('ok');
+                dataPill.classList.add('bad');
+            }
+
+            // Beacon
+            // beacon removed
+        }
+
+        // Sync production order controls (call on init and after submit)
+        function syncProductionUI(force = true) {
+            const po = state.production;
+            const elId = document.getElementById('poId');
+            if (elId && (force || elId !== document.activeElement)) elId.value = po.orderId || '';
+            const elBx = document.getElementById('poBox'); if (elBx) elBx.checked = !!po.filters.box;
+            const elCy = document.getElementById('poCyl'); if (elCy) elCy.checked = !!po.filters.cylinder;
+            const elLg = document.getElementById('poLarge'); if (elLg) elLg.checked = !!po.largeOnly;
+        }
+
+        // MQTT topic helpers
+        const topic = (area, equip, type, name) => `${cfg.baseTopic}/${area}/${equip}/${type}/${name}`;
+
+        // MQTT connect/disconnect
+        function connectMQTT() {
+            if (state.client) { try { state.client.end(true); } catch (e) { } }
+            const opts = {
+                username: cfg.mqtt.user || undefined,
+                password: cfg.mqtt.pass || undefined,
+                reconnectPeriod: 2000,
+                keepalive: 60,
+                connectTimeout: 10_000,
+                protocolVersion: 4,
+                clean: true,
+            };
+            log(`Connecting MQTT ${cfg.mqtt.url} ...`);
+            state.client = mqtt.connect(cfg.mqtt.url, opts);
+            const c = state.client;
+            c.on('connect', () => {
+                state.connected = true; syncUI(); log('MQTT connected');
+                // subscribe to actuator setpoints & commands
+                const subs = [
+                    `${cfg.baseTopic}/+/+/actuators/+`,
+                    `${cfg.baseTopic}/system/+/commands/+`,
+                    `${cfg.baseTopic}/+/+/sensors/+`,
+                ];
+                subs.forEach(s => c.subscribe(s, { qos: cfg.qos }));
+            });
+            c.on('reconnect', () => log('MQTT reconnecting...'));
+            c.on('close', () => { state.connected = false; syncUI(); log('MQTT disconnected'); });
+            c.on('error', (e) => log('MQTT error: ' + e.message));
+            c.on('message', (t, payload) => handleIncoming(t, payload));
+        }
+
+        // Try local broker first; fallback to public EMQX if not reachable quickly
+        function connectWithFallback() {
+            const testUrl = cfg.mqtt.url;
+            const tester = mqtt.connect(testUrl, { reconnectPeriod: 0, connectTimeout: 3000, clean: true });
+            let decided = false;
+            tester.on('connect', () => { if (decided) return; decided = true; tester.end(true); cfg.mqtt.url = testUrl; connectMQTT(); });
+            function fallback() {
+                if (decided) return; decided = true; tester.end(true);
+                cfg.mqtt.url = 'wss://broker.emqx.io:8084/mqtt';
+                $('#mqttUrl').value = cfg.mqtt.url;
+                log('Falling back to public EMQX broker');
+                connectMQTT();
+            }
+            tester.on('error', fallback);
+            tester.on('close', fallback);
+        }
+
+        function publish(t, obj) {
+            if (!state.connected) return;
+            try {
+                state.client.publish(t, JSON.stringify(obj), { qos: cfg.qos, retain: false });
+            } catch (e) { log('Publish error: ' + e.message); }
+        }
+
+        // Publish without JSON encoding (simple scalar/string). Useful for per-field subtopics.
+        function publishRaw(t, value) {
+            if (!state.connected) return;
+            try {
+                const payload = (value === null || value === undefined) ? '' : String(value);
+                state.client.publish(t, payload, { qos: cfg.qos, retain: false });
+            } catch (e) { log('PublishRaw error: ' + e.message); }
+        }
+
+        // Publish a JSON object at base topic and also each field on subtopics: base/<key>
+        function publishBundle(baseTopic, payloadObj) {
+            try {
+                publish(baseTopic, payloadObj);
+                if (payloadObj && typeof payloadObj === 'object') {
+                    Object.entries(payloadObj).forEach(([k, v]) => publishRaw(`${baseTopic}/${k}`, v));
+                }
+            } catch (e) { log('PublishBundle error: ' + e.message); }
+        }
+
+        function message(value, unit, alarm = 'normal', quality = 'good') {
+            return { timestamp: nowISO(), value, unit, quality, alarm_state: alarm };
+        }
+
+        function handleIncoming(t, payload) {
+            try {
+                const txt = new TextDecoder().decode(payload);
+                const data = JSON.parse(txt);
+                // Example topics (kept minimal):
+                // plant/production/conveyor01/actuators/speed_setpoint
+                // plant/safety/emergency_stop/sensors/status
+                const parts = t.split('/');
+                // [plant, area, equip, type, name]
+                const area = parts[1];
+                const equip = parts[2];
+                const type = parts[3];
+                const name = parts[4];
+                if (type === 'actuators') {
+                    if (equip === 'conveyor01' && name === 'speed_setpoint') {
+                        state.conveyor01.speedSet = clamp(Number(data.value) || 0, 0, 2);
+                        log(`Setpoint conveyor01 speed = ${state.conveyor01.speedSet.toFixed(2)} m/s`);
+                    }
+                }
+                if (type === 'sensors') {
+                    state.dataCount++;
+                    state.lastDataTs = Date.now();
+                    syncUI();
+                }
+                if (area === 'safety' && equip === 'emergency_stop' && (type === 'commands' || type === 'sensors') && name === 'status') {
+                    const on = Boolean(data.value);
+                    state.emergency = on;
+                    log('Emergency ' + (on ? 'ENGAGED' : 'CLEARED'));
+                }
+            } catch (e) { log('Handle message error: ' + e.message); }
+        }
+
+        // Simulation loop
+        let lastMs = performance.now();
+        let pubAcc = 0;
+        const sensors = {
+            // return value and unit
+            conveyor_speed() {
+                // add small noise & lag
+                const target = state.conveyor01.enabled && !state.emergency ? state.conveyor01.speedSet : 0;
+                state.conveyor01.speedActual = lerp(state.conveyor01.speedActual, target, 0.05) + (Math.random() - 0.5) * 0.01;
+                state.conveyor01.speedActual = clamp(state.conveyor01.speedActual, 0, 2);
+                return [state.conveyor01.speedActual, 'm/s'];
+            },
+            proximity() {
+                // digital proximity based on items near QC region on main belt (~0.6..0.75)
+                const items = state.line.items || [];
+                let on = 0;
+                for (let it of items) {
+                    if (it.beltId === 'beltA' && it.s > 0.6 && it.s < 0.75) { on = 1; break; }
+                }
+                return [on, 'bool'];
+            },
+            quality() {
+                // report last QC evaluation from item routing; null -> 0
+                const last = state.qc01.last;
+                return [last ? 1 : 0, 'bool'];
+            }
+        };
+
+        // alarms removed for now
+
+        function tick() {
+            const t = performance.now();
+            const dt = (t - lastMs) / 1000;
+            lastMs = t;
+            if (state.running && !state.emergency) {
+                // update sensors
+                const [v1, u1] = sensors.conveyor_speed();
+                const [v4, u4] = sensors.proximity();
+                const [q1, qu1] = sensors.quality();
+                state.alarms = [];
+
+                pubAcc += dt * 1000;
+                if (pubAcc >= cfg.pubMs) {
+                    pubAcc = 0;
+                    // Bundle publish: full JSON + per-field subtopics
+                    const pub = (tpc, obj) => publishBundle(tpc, obj);
+                    // Sensors
+                    pub(topic('production', 'conveyor01', 'sensors', 'speed'), message(Number(v1.toFixed(3)), u1));
+                    pub(topic('production', 'qc01', 'sensors', 'proximity'), message(v4, u4));
+                    pub(topic('production', 'qc01', 'sensors', 'quality'), message(q1, 'bool'));
+                    // Photoeye sensors: publish as plant/production/<beltId>/sensors/photoeye_<pos>
+                    if (state.line.photoeyes && state.line.photoeyes.length) {
+                        for (const pe of state.line.photoeyes) {
+                            const pos = pe.id.includes('start') ? 'start' : 'end';
+                            pub(topic('production', pe.beltId, 'sensors', `photoeye_${pos}`), message(pe.blocked, 'bool'));
+                        }
+                    }
+                    // Vision sensors: publish full tag object or null
+                    if (state.line.vision && state.line.vision.length) {
+                        for (const vg of state.line.vision) {
+                            const payload = vg.detected ? { ...vg.detected } : null;
+                            const base = topic('production', vg.beltId, 'sensors', `vision_${vg.id.includes('start') ? 'start' : 'end'}`);
+                            if (payload) {
+                                // add a measurement timestamp for the scan event
+                                payload.timestamp = nowISO();
+                                pub(base, payload);
+                            } else {
+                                // publish a full JSON with empty strings (no nulls)
+                                const empty = { timestamp: nowISO(), pieceID: '', orderID: '', type: '', start_timestamp: '' };
+                                pub(base, empty);
+                            }
+                        }
+                    }
+                    pub(`${cfg.baseTopic}/safety/emergency_stop/sensors/status`, message(state.emergency ? 1 : 0, 'bool'));
+                    // Heartbeat/metrics
+                    publishBundle(`${cfg.baseTopic}/system/simulator/metrics/heartbeat`, { timestamp: nowISO(), up_ms: Math.floor(performance.now()) });
+                }
+            }
+
+            // update production line
+            updateLine(dt);
+            // render 3D
+            render3D(dt);
+            requestAnimationFrame(tick);
+        }
+
+        // 3D scene
+        let renderer, scene, camera, controls, raycaster, mouse, tooltipEl;
+        const objs = {};
+
+        function setup3D() {
+            const container = document.getElementById('scene');
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(devicePixelRatio);
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setClearColor(0x0b0f1f, 1);
+            container.appendChild(renderer.domElement);
+
+            scene = new THREE.Scene();
+
+            camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(9, 7, 12);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.08;
+            controls.maxDistance = 60;
+
+            // Lights
+            const hemi = new THREE.HemisphereLight(0xcfe8ff, 0x223355, 0.6);
+            scene.add(hemi);
+            const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+            dir.position.set(5, 10, 7);
+            dir.castShadow = false;
+            scene.add(dir);
+
+            // Floor
+            const floorGeo = new THREE.PlaneGeometry(100, 100);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x1b213d, roughness: 0.9, metalness: 0.1 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            // Helper: procedural belt texture
+            function createBeltTexture() {
+                const c = document.createElement('canvas');
+                c.width = 256; c.height = 64;
+                const ctx = c.getContext('2d');
+                // background
+                ctx.fillStyle = '#1a223d';
+                ctx.fillRect(0, 0, c.width, c.height);
+                // stripes
+                ctx.fillStyle = 'rgba(255,255,255,0.08)';
+                for (let x = 0; x < c.width; x += 16) {
+                    ctx.fillRect(x, 0, 8, c.height);
+                }
+                const tex = new THREE.CanvasTexture(c);
+                tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+                return tex;
+            }
+
+            // Conveyors network (3 belts: main A detailed, pass B and reject C simple)
+            function makeBelt(id, start, dir, length, color = 0x1e9dd8, detailed = false) {
+                const beltW = 1, h = 0.7;
+                const yaw = Math.atan2(dir.z, dir.x);
+                if (!detailed) {
+                    // simple belt (B, C)
+                    const frame = new THREE.Mesh(
+                        new THREE.BoxGeometry(length, 0.2, beltW + 0.4),
+                        new THREE.MeshStandardMaterial({ color: 0x3a4a6e, metalness: 0.6, roughness: 0.4 })
+                    );
+                    const belt = new THREE.Mesh(
+                        new THREE.BoxGeometry(length, 0.1, beltW),
+                        new THREE.MeshStandardMaterial({ color, metalness: 0.2, roughness: 0.8 })
+                    );
+                    frame.position.copy(start).add(dir.clone().multiplyScalar(length / 2)).setY(h - 0.1);
+                    belt.position.copy(start).add(dir.clone().multiplyScalar(length / 2)).setY(h);
+                    frame.rotation.y = yaw; belt.rotation.y = yaw;
+                    scene.add(frame); scene.add(belt);
+                    state.line.belts[id] = { id, start: start.clone(), dir: dir.clone().normalize(), length, speed: 1.0, mesh: belt, nextPass: null, nextFail: null };
+                    return belt;
+                }
+                // detailed main conveyor (A)
+                const group = new THREE.Group();
+                group.position.copy(start).add(dir.clone().multiplyScalar(length / 2));
+                group.rotation.y = yaw;
+                // rails
+                const railMat = new THREE.MeshStandardMaterial({ color: 0x2e385b, metalness: 0.6, roughness: 0.4 });
+                const railGeo = new THREE.BoxGeometry(length, 0.14, 0.12);
+                const railL = new THREE.Mesh(railGeo, railMat);
+                const railR = new THREE.Mesh(railGeo, railMat);
+                railL.position.set(0, -0.04, -(beltW / 2 + 0.12));
+                railR.position.set(0, -0.04, (beltW / 2 + 0.12));
+                group.add(railL, railR);
+                // supports
+                const legGeo = new THREE.BoxGeometry(0.12, 0.6, 0.12);
+                const legMat = new THREE.MeshStandardMaterial({ color: 0x25304e, metalness: 0.4, roughness: 0.6 });
+                for (let x = -length / 2; x <= length / 2; x += 2.0) {
+                    const l1 = new THREE.Mesh(legGeo, legMat); l1.position.set(x, -0.45, -(beltW / 2 + 0.12));
+                    const l2 = new THREE.Mesh(legGeo, legMat); l2.position.set(x, -0.45, (beltW / 2 + 0.12));
+                    group.add(l1, l2);
+                }
+                // rollers (pulleys) — omit termination rollers on all belts for cleaner ends
+                const rollMat = new THREE.MeshStandardMaterial({ color: 0x556a8a, metalness: 0.5, roughness: 0.5 });
+                const pulleyGeo = new THREE.CylinderGeometry(0.22, 0.22, beltW + 0.16, 24);
+                pulleyGeo.rotateX(Math.PI / 2);
+                // intentionally not added: no end rollers on any belt
+                // idlers along length
+                const idlerGeo = new THREE.CylinderGeometry(0.08, 0.08, beltW, 16); idlerGeo.rotateX(Math.PI / 2);
+                for (let x = -length / 2 + 0.8; x < length / 2 - 0.8; x += 1.2) {
+                    const idr = new THREE.Mesh(idlerGeo, rollMat); idr.position.set(x, -0.02, 0); group.add(idr);
+                }
+                // belt surface with moving texture
+                const beltTex = createBeltTexture(); beltTex.repeat.set(length * 0.25, 1);
+                const beltMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(color), map: beltTex, metalness: 0.1, roughness: 0.9 });
+                const beltSurf = new THREE.Mesh(new THREE.BoxGeometry(length, 0.06, beltW), beltMat);
+                beltSurf.position.set(0, 0.02, 0);
+                group.add(beltSurf);
+                group.position.y = h;
+                scene.add(group);
+                state.line.belts[id] = { id, start: start.clone(), dir: dir.clone().normalize(), length, speed: 1.0, mesh: beltSurf, nextPass: null, nextFail: null, beltMat };
+                return beltSurf;
+            }
+            objs.conveyorBelt = makeBelt('beltA', new THREE.Vector3(-3, 0, 0), new THREE.Vector3(1, 0, 0), 8, 0x1e9dd8, true);
+            makeBelt('beltB', new THREE.Vector3(5, 0, 0), new THREE.Vector3(0, 0, 1), 5, 0x18c176, true);
+            makeBelt('beltC', new THREE.Vector3(5, 0, 0), new THREE.Vector3(0, 0, -1), 4, 0xd75d5d, true);
+            state.line.belts['beltA'].nextPass = 'beltB';
+            state.line.belts['beltA'].nextFail = 'beltC';
+
+            // Photoelectric sensors (start and end per belt)
+            function placePhotoeye(id, beltId, sPos) {
+                const belt = state.line.belts[beltId]; if (!belt) return null;
+                const beltW = 1; // keep in sync with makeBelt
+                const railOffset = 0.12; // from rails in detailed belt
+                const edge = beltW / 2 + railOffset; // center over rail cap
+
+                const postMat = new THREE.MeshStandardMaterial({ color: 0x8aa0b6, metalness: 0.2, roughness: 0.6 });
+                const postRadius = 0.04;
+                const postH = 0.1; // half height posts
+                const postGeo = new THREE.CylinderGeometry(postRadius, postRadius, postH, 12);
+                const tx = new THREE.Mesh(postGeo, postMat);
+                const rx = new THREE.Mesh(postGeo, postMat);
+
+                // Beam spans exactly between outer surfaces of the posts
+                const beamRadius = 0.01;
+                const centerGap = (edge * 2);
+                const beamLen = Math.max(0.05, centerGap - postRadius * 2);
+                const beamGeo = new THREE.CylinderGeometry(beamRadius, beamRadius, beamLen, 8);
+                beamGeo.rotateZ(Math.PI / 2); // orient along local X
+                const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: 0xff4d4f }));
+
+                const p = belt.start.clone().add(belt.dir.clone().multiplyScalar(belt.length * sPos));
+                const yaw = Math.atan2(belt.dir.z, belt.dir.x);
+                const perp = new THREE.Vector3(-belt.dir.z, 0, belt.dir.x).normalize();
+                // Rail top world height ~ h (0.7) + (-0.04 + 0.14/2) = 0.73
+                const railTop = 0.73;
+                const postCenterY = railTop + postH / 2; // bottom sits on rail
+                const beamH = railTop + postH; // beam at top of posts
+                // Place transmitter at +perp edge and receiver at -perp edge
+                const txPos = p.clone().add(perp.clone().multiplyScalar(edge));
+                const rxPos = p.clone().add(perp.clone().multiplyScalar(-edge));
+                tx.position.set(txPos.x, postCenterY, txPos.z);
+                rx.position.set(rxPos.x, postCenterY, rxPos.z);
+                // Posts rotate to face across the belt (optional aesthetic)
+                tx.rotation.y = yaw + Math.PI / 2;
+                rx.rotation.y = yaw + Math.PI / 2;
+
+                // Beam centered at belt center, rotated to run across (perp to belt)
+                beam.position.set(p.x, beamH, p.z);
+                beam.rotation.y = yaw + Math.PI / 2;
+
+                scene.add(tx); scene.add(rx); scene.add(beam);
+                const pe = { id, beltId, sPos, blocked: 0, beam };
+                state.line.photoeyes.push(pe);
+                return pe;
+            }
+            // Start (~0.05) and End (~0.95) for each belt
+            placePhotoeye('peA_start', 'beltA', 0.20);
+            placePhotoeye('peA_end', 'beltA', 0.80);
+            placePhotoeye('peB_start', 'beltB', 0.20);
+            placePhotoeye('peB_end', 'beltB', 0.80);
+            placePhotoeye('peC_start', 'beltC', 0.20);
+            placePhotoeye('peC_end', 'beltC', 0.80);
+
+            // removed tank/pump visuals
+
+            // QC station over main belt (inspection gantry)
+            const qc = new THREE.Mesh(
+                new THREE.BoxGeometry(0.8, 1.2, 1.2),
+                new THREE.MeshStandardMaterial({ color: 0x6a7fa8 })
+            );
+            // position near 65% along beltA
+            qc.position.set(1.8, 1.0, 0);
+            scene.add(qc);
+
+            // Simple nozzle over belt (decorative only for now)
+            const nozzle = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.06, 0.06, 0.5, 12),
+                new THREE.MeshStandardMaterial({ color: 0xb8d0ff })
+            );
+            nozzle.position.set(1.2, 1.2, 0);
+            scene.add(nozzle);
+            objs.nozzle = nozzle;
+
+            // Diverter gate at split (routes pass/right to green or fail/left to red)
+            const gatePivot = new THREE.Group();
+            // raise pivot so the taller gate still clears the belt top
+            gatePivot.position.set(5.0, 0.935, 0);
+            const gate = new THREE.Mesh(
+                // much thinner (Z) but taller (Y)
+                new THREE.BoxGeometry(0.7, 0.25, 0.06),
+                new THREE.MeshStandardMaterial({ color: 0xd1a21a })
+            );
+            gate.position.set(0, 0, 0);
+            gatePivot.add(gate);
+            scene.add(gatePivot);
+            objs.diverter = { pivot: gatePivot, mesh: gate, angle: 0, targetAngle: 0 };
+
+            // Hollow catch boxes at ends of branch belts
+            function makeCatchBox(id, beltId, innerW = 1.2, innerL = 1.2, wall = 0.08, height = 0.6, color = 0x46506a) {
+                const b = state.line.belts[beltId]; if (!b) return null;
+                const group = new THREE.Group();
+                const baseMat = new THREE.MeshStandardMaterial({ color, metalness: 0.4, roughness: 0.7 });
+                // Base
+                const base = new THREE.Mesh(new THREE.BoxGeometry(innerW + 2 * wall, wall, innerL + 2 * wall), baseMat);
+                base.position.set(0, wall / 2, 0); group.add(base);
+                // Walls
+                const wallLong = new THREE.BoxGeometry(innerW + 2 * wall, height, wall);
+                const wallShort = new THREE.BoxGeometry(wall, height, innerL);
+                const wF = new THREE.Mesh(wallLong, baseMat); wF.position.set(0, height / 2 + wall, innerL / 2);
+                const wB = new THREE.Mesh(wallLong, baseMat); wB.position.set(0, height / 2 + wall, -innerL / 2);
+                const wL = new THREE.Mesh(wallShort, baseMat); wL.position.set(-innerW / 2, height / 2 + wall, 0);
+                const wR = new THREE.Mesh(wallShort, baseMat); wR.position.set(innerW / 2, height / 2 + wall, 0);
+                group.add(wF, wB, wL, wR);
+                // Place slightly beyond belt end on the floor
+                const end = b.start.clone().add(b.dir.clone().multiplyScalar(b.length + 0.4));
+                group.position.copy(end);
+                group.position.y = 0;
+                scene.add(group);
+                objs[id] = group; return group;
+            }
+            makeCatchBox('passCatch', 'beltB');
+            makeCatchBox('failCatch', 'beltC');
+
+            // Vision gate sensors (A start, B end, C end)
+            function placeVisionGate(id, beltId, sPos) {
+                const belt = state.line.belts[beltId]; if (!belt) return null;
+                const group = new THREE.Group();
+                const railTop = 0.73;
+                const beltW = 1, railOffset = 0.12, edge = beltW / 2 + railOffset;
+                const perp = new THREE.Vector3(-belt.dir.z, 0, belt.dir.x).normalize();
+                const p = belt.start.clone().add(belt.dir.clone().multiplyScalar(belt.length * sPos));
+                const yaw = Math.atan2(belt.dir.z, belt.dir.x);
+                // Feet on rails
+                const footGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.2, 12);
+                const footMat = new THREE.MeshStandardMaterial({ color: 0x8aa0b6, metalness: 0.2, roughness: 0.6 });
+                const footL = new THREE.Mesh(footGeo, footMat);
+                const footR = new THREE.Mesh(footGeo, footMat);
+                const fL = p.clone().add(perp.clone().multiplyScalar(edge));
+                const fR = p.clone().add(perp.clone().multiplyScalar(-edge));
+                footL.position.set(fL.x, railTop + 0.1, fL.z);
+                footR.position.set(fR.x, railTop + 0.1, fR.z);
+                group.add(footL, footR);
+                // Uprights and top bar
+                const uprH = 0.7; // height above feet
+                const uprGeo = new THREE.BoxGeometry(0.08, uprH, 0.08);
+                const uprMat = new THREE.MeshStandardMaterial({ color: 0x657a9a });
+                const upr1 = new THREE.Mesh(uprGeo, uprMat); const upr2 = new THREE.Mesh(uprGeo, uprMat);
+                upr1.position.set(fL.x, railTop + 0.1 + uprH / 2, fL.z);
+                upr2.position.set(fR.x, railTop + 0.1 + uprH / 2, fR.z);
+                const topGeo = new THREE.BoxGeometry(edge * 2 + 0.12, 0.08, 0.1);
+                const top = new THREE.Mesh(topGeo, uprMat);
+                top.position.set(p.x, railTop + 0.1 + uprH + 0.04, p.z);
+                // Rotate the top bar so it spans across the belt (perpendicular to travel)
+                top.rotation.y = yaw + Math.PI / 2;
+                group.add(upr1, upr2, top);
+                // Camera housing centered
+                const camGeo = new THREE.BoxGeometry(0.18, 0.12, 0.12);
+                const cam = new THREE.Mesh(camGeo, new THREE.MeshStandardMaterial({ color: 0x333b55, metalness: 0.3, roughness: 0.6 }));
+                cam.position.set(p.x, top.position.y + 0.1, p.z);
+                cam.rotation.y = yaw; // align cosmetically with belt travel
+                group.add(cam);
+                scene.add(group);
+                state.line.vision.push({ id, beltId, sPos, detectedId: null, group });
+                return group;
+            }
+            placeVisionGate('vgA_start', 'beltA', 0.20);
+            placeVisionGate('vgB_end', 'beltB', 0.80);
+            placeVisionGate('vgC_end', 'beltC', 0.80);
+
+            // Items container
+            objs.itemsGroup = new THREE.Group();
+            scene.add(objs.itemsGroup);
+
+            // Raycaster for picking
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+            tooltipEl = document.getElementById('tooltip');
+
+            window.addEventListener('resize', onResize);
+            renderer.domElement.addEventListener('mousemove', onMouseMove);
+            renderer.domElement.addEventListener('click', onClick);
+        }
+
+        function onResize() {
+            const container = document.getElementById('scene');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        // Sidebar resizer
+        (function setupResizer() {
+            const splitter = document.getElementById('splitter');
+            if (!splitter) return;
+            let dragging = false;
+            splitter.addEventListener('mousedown', () => { dragging = true; document.body.style.userSelect = 'none'; });
+            window.addEventListener('mouseup', () => { if (dragging) { dragging = false; document.body.style.userSelect = ''; } });
+            window.addEventListener('mousemove', (e) => {
+                if (!dragging) return;
+                const min = 240, max = window.innerWidth * 0.6;
+                const w = clamp(e.clientX, min, max);
+                document.documentElement.style.setProperty('--sidebar', w + 'px');
+                onResize();
+            });
+        })();
+
+        function onMouseMove(e) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = - ((e.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects([objs.conveyorBelt], true);
+            if (hits.length) {
+                const o = hits[0].object;
+                tooltipEl.style.left = e.clientX + 'px';
+                tooltipEl.style.top = e.clientY + 'px';
+                tooltipEl.style.display = 'block';
+                if (o === objs.conveyorBelt) { tooltipEl.textContent = `Conveyor speed: ${state.conveyor01.speedActual.toFixed(2)} m/s`; }
+            } else {
+                tooltipEl.style.display = 'none';
+            }
+        }
+
+        function onClick(e) {
+            // Could expand: open detailed panel for selected equipment
+        }
+
+        function render3D(dt) {
+            // Animate visuals
+            if (objs.conveyorBelt) {
+                const s = state.conveyor01.speedActual;
+                objs.conveyorBelt.material.color.setHSL(0.55 + s * 0.05, 0.7, 0.5);
+            }
+            // scroll textures on all detailed belts with a gentler speed
+            if (state.line && state.line.belts) {
+                const belts = state.line.belts;
+                for (const key of Object.keys(belts)) {
+                    const b = belts[key];
+                    if (b && b.beltMat && b.beltMat.map) {
+                        const dir = (b.id === 'beltA') ? -1 : 1; // flip A only
+                        b.beltMat.map.offset.x = (b.beltMat.map.offset.x + dir * (b.speed || 0) * dt * 0.25) % 1;
+                        b.beltMat.needsUpdate = true;
+                    }
+                }
+            }
+            // removed tank/pump visuals
+
+            // Diverter animation
+            if (objs.diverter) {
+                const d = objs.diverter;
+                d.angle = lerp(d.angle, d.targetAngle, 0.1);
+                d.pivot.rotation.y = d.angle;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Production line: items moving on belts with QC routing
+        let itemSeq = 0; let spawnAcc = 0; let spawnAlt = false;
+        function spawnItem() {
+            // honor production order filters
+            const po = state.production || { filters: { box: true, cylinder: true }, largeOnly: false };
+            const allowBox = !!po.filters.box;
+            const allowCyl = !!po.filters.cylinder;
+            if (!allowBox && !allowCyl) { return false; }
+            const isCylinder = allowBox && allowCyl ? (spawnAlt = !spawnAlt) : (allowCyl ? true : false);
+            const minS = po.largeOnly ? 0.46 : 0.32;
+            const maxS = po.largeOnly ? 0.62 : 0.46;
+            const size = minS + Math.random() * (maxS - minS);
+            let geom, mat, baseColor;
+            if (isCylinder) {
+                // Make cylinders wider so the square QR fits inside the circular top.
+                // For QR side = 0.9*size, need r >= 0.636*size; use 0.68 for margin.
+                const r = size * 0.68;
+                geom = new THREE.CylinderGeometry(r, r, size, 24);
+                baseColor = 0xd9b3ff; // lilac for cylinders
+            } else {
+                geom = new THREE.BoxGeometry(size, size, size);
+                baseColor = 0x9ec9ff; // blue-ish for boxes
+            }
+            mat = new THREE.MeshStandardMaterial({ color: baseColor, metalness: 0.1, roughness: 0.8 });
+            const mesh = new THREE.Mesh(geom, mat);
+            objs.itemsGroup && objs.itemsGroup.add(mesh);
+            const uid = genItemId(po.orderId);
+            const startTs = nowISO();
+            const sizeClass = size >= 0.42 ? 'large' : 'small';
+            const shapeName = isCylinder ? 'cylinder' : 'box';
+            const tag = { pieceID: uid, orderID: po.orderId || '', type: `${sizeClass}_${shapeName}`, start_timestamp: startTs };
+            // Add QR decal on top
+            try {
+                const qrTex = makeQRTexture(JSON.stringify(tag), 256);
+                const qrSize = size * 0.9;
+                const qrPlane = new THREE.Mesh(
+                    new THREE.PlaneGeometry(qrSize, qrSize),
+                    new THREE.MeshBasicMaterial({ map: qrTex, transparent: true, depthWrite: false })
+                );
+                // position plane just above top surface
+                if (isCylinder) {
+                    qrPlane.position.set(0, size / 2 + 0.002, 0);
+                } else {
+                    qrPlane.position.set(0, size / 2 + 0.002, 0);
+                }
+                qrPlane.rotation.x = -Math.PI / 2;
+                mesh.add(qrPlane);
+            } catch { }
+            const it = { id: uid, seq: 'itm' + (itemSeq++), poId: po.orderId || null, shape: isCylinder ? 'cyl' : 'box', beltId: 'beltA', s: 0, size, color: mesh.material.color.clone(), good: null, evaluated: false, mesh, tag };
+            state.line.items.push(it);
+            state.line.counts.produced++;
+            return true;
+        }
+
+        function posOnBelt(belt, s, item = null) {
+            const p = belt.start.clone().add(belt.dir.clone().multiplyScalar(belt.length * s));
+            // Belt surface approx height: detailed top ~0.72-0.76; we used 0.7 base + 0.02 beltSurf offset + 0.06/2
+            const beltTop = 0.7 + 0.02 + 0.03; // 0.75
+            let halfH = 0.15; // default fallback
+            if (item && item.mesh && item.mesh.geometry && item.shape) {
+                if (item.shape === 'box') {
+                    halfH = item.size / 2;
+                } else if (item.shape === 'cyl') {
+                    halfH = item.size / 2;
+                }
+            }
+            p.y = beltTop + halfH + 0.001; // small epsilon to avoid z-fight
+            return p;
+        }
+
+        function updateLine(dt) {
+            if (!state.running || state.emergency) return;
+            const belts = state.line.belts || {};
+            const main = belts['beltA'];
+            if (!main) return;
+            // map conveyor speed to belts
+            const sp = state.conveyor01.speedActual; // m/s approx
+            Object.values(belts).forEach(b => b.speed = sp * (b.id === 'beltA' ? 1.0 : 0.8));
+            // spawn cadence proportional to speed
+            spawnAcc += dt * sp;
+            if (sp > 0.05 && spawnAcc > 1.2) { spawnAcc = 0; spawnItem(); }
+
+            const items = state.line.items;
+            for (let i = items.length - 1; i >= 0; i--) {
+                const it = items[i];
+                const b = belts[it.beltId];
+                if (!b) { items.splice(i, 1); continue; }
+                const v = b.speed;
+                it.s += (v * dt) / Math.max(0.1, b.length);
+                // Evaluate quality earlier under QC gantry, but do not move diverter yet
+                if (it.s >= 0.66 && it.beltId === 'beltA' && !it.evaluated) {
+                    const pass = Math.random() < state.qc01.passRate;
+                    it.good = pass; it.evaluated = true; state.qc01.last = pass; syncUI();
+                }
+                // Arm diverter only when the evaluated item is about to touch it
+                if (it.beltId === 'beltA' && it.evaluated && !it.gateSet && it.s >= 0.92) {
+                    // correct pass/fail swing: pass -> +Z branch, fail -> -Z branch
+                    if (objs.diverter) objs.diverter.targetAngle = it.good ? -0.6 : 0.6;
+                    it.gateSet = true;
+                }
+                if (it.s >= 1.0) {
+                    if (it.beltId === 'beltA') {
+                        const next = it.good ? b.nextPass : b.nextFail;
+                        if (next) { it.beltId = next; it.s = 0; if (objs.diverter) objs.diverter.targetAngle = 0; continue; }
+                    }
+                    // reached end/bins
+                    objs.itemsGroup && objs.itemsGroup.remove(it.mesh);
+                    items.splice(i, 1);
+                    if (it.good) state.line.counts.passed++; else state.line.counts.rejected++;
+                    syncUI();
+                    continue;
+                }
+                // update mesh transform
+                const pos = posOnBelt(b, clamp(it.s, 0, 0.999), it);
+                it.mesh.position.copy(pos);
+                if (it.good === null) it.mesh.material.color.copy(it.color);
+                else it.mesh.material.color.set(it.good ? 0x57d38c : 0xff4d4f);
+            }
+
+            // Update photoeyes
+            if (state.line.photoeyes && state.line.photoeyes.length) {
+                const widthTol = 0.6; // how tightly along the crossing we test
+                for (const pe of state.line.photoeyes) {
+                    const belt = belts[pe.beltId]; if (!belt) continue;
+                    // find any item on same belt whose s near sensor sPos
+                    let blocked = 0;
+                    for (const it of items) {
+                        if (it.beltId !== pe.beltId) continue;
+                        if (Math.abs(it.s - pe.sPos) < 0.06) { blocked = 1; break; }
+                    }
+                    pe.blocked = blocked;
+                    if (pe.beam) pe.beam.visible = blocked ? false : true;
+                }
+            }
+
+            // Vision reads: if an item is under the gate (within window), report its tag payload
+            if (state.line.vision && state.line.vision.length) {
+                for (const vg of state.line.vision) {
+                    const belt = belts[vg.beltId]; if (!belt) continue;
+                    vg.detected = null;
+                    for (const it of items) {
+                        if (it.beltId !== vg.beltId) continue;
+                        if (Math.abs(it.s - vg.sPos) < 0.03) { vg.detected = it.tag || null; break; }
+                    }
+                }
+            }
+        }
+
+        // UI events
+        $('#btnConnect').addEventListener('click', () => {
+            cfg.mqtt.url = $('#mqttUrl').value || cfg.mqtt.url;
+            cfg.mqtt.user = $('#mqttUser').value;
+            cfg.mqtt.pass = $('#mqttPass').value;
+            cfg.baseTopic = $('#baseTopic').value || 'plant';
+            cfg.qos = Number($('#qos').value) || 1;
+            cfg.pubMs = clamp(Number($('#pubInterval').value) || 1000, 200, 10000);
+            connectMQTT();
+        });
+
+        $('#btnRun').addEventListener('click', () => { state.running = true; log('Simulation started'); });
+        $('#btnPause').addEventListener('click', () => { state.running = false; log('Simulation paused'); });
+        $('#btnEStop').addEventListener('click', () => { state.emergency = !state.emergency; log('E-STOP ' + (state.emergency ? 'ENGAGED' : 'CLEARED')); });
+
+        $('#convSpeed').addEventListener('input', (e) => {
+            state.conveyor01.speedSet = Number(e.target.value);
+            if (state.connected) {
+                publish(topic('production', 'conveyor01', 'actuators', 'speed_setpoint'), message(state.conveyor01.speedSet, 'm/s'));
+            }
+        });
+        $('#convStart').addEventListener('click', () => { state.conveyor01.enabled = true; log('Conveyor01 started'); });
+        $('#convStop').addEventListener('click', () => { state.conveyor01.enabled = false; log('Conveyor01 stopped'); });
+
+        // removed tank/pump/history handlers
+
+        // QC rate
+        $('#qcRate').addEventListener('input', (e) => { state.qc01.passRate = Number(e.target.value); syncUI(); });
+
+        // Production Order submit
+        document.getElementById('poSubmit').addEventListener('click', () => {
+            const id = (document.getElementById('poId').value || '').trim();
+            const box = !!document.getElementById('poBox').checked;
+            const cyl = !!document.getElementById('poCyl').checked;
+            const large = !!document.getElementById('poLarge').checked;
+            state.production.orderId = id || state.production.orderId;
+            state.production.filters.box = box;
+            state.production.filters.cylinder = cyl;
+            state.production.largeOnly = large;
+            log(`Production order set: id=${state.production.orderId}, box=${box}, cylinder=${cyl}, largeOnly=${large}`);
+            syncProductionUI(true);
+            syncUI();
+        });
+
+        // Init (autonomous)
+        setup3D();
+        state.conveyor01.enabled = true;
+        state.conveyor01.speedSet = 1.0;
+        // no pump/tank in simplified layout
+        connectWithFallback();
+        state.running = true;
+        syncUI();
+        syncProductionUI(true);
+        requestAnimationFrame(tick);
+    </script>
+</body>
+
+</html>
